@@ -1,0 +1,44 @@
+# Prefect 3 project / deployment config.
+# Deploy against your centralized Prefect Server + named worker pool:
+#   cd orchestration && prefect deploy --all
+#
+# Assumes the worker has the repo available (git clone pull step) and runs
+# `uv sync` / `pip install -e .` so jmi_flows + deps are importable. Secrets
+# (ANTHROPIC_API_KEY, SCRAPFLY_KEY, motherduck_token) come from the worker
+# environment or Prefect blocks — never committed.
+
+name: jmi-engine
+prefect-version: ">=3.0.0"
+
+pull:
+  - prefect.deployments.steps.git_clone:
+      repository: https://github.com/REPLACE_ME/job-market-intelligence.git
+      branch: main
+  - prefect.deployments.steps.run_shell_script:
+      directory: "{{ clone-output }}"
+      script: uv sync --package jmi-flows
+
+definitions:
+  work_pool: &work_pool
+    name: jmi-pool          # your named worker pool
+    work_queue_name: default
+
+deployments:
+  - name: ingest-honeypot
+    entrypoint: orchestration/jmi_flows/ingest.py:ingest_flow
+    parameters:
+      source: honeypot
+    work_pool: *work_pool
+    schedules:
+      - cron: "0 6 * * *"   # 06:00 daily — produces a fresh FT_JOB_SNAPSHOT_DAILY row
+        timezone: Europe/Amsterdam
+
+  - name: enrich
+    entrypoint: orchestration/jmi_flows/enrich.py:enrich_flow
+    work_pool: *work_pool
+    schedules:
+      - cron: "30 6 * * *"  # 06:30 daily — after ingestion
+        timezone: Europe/Amsterdam
+
+  # Phase 1+: one ingest deployment per source. dbt build runs as a separate
+  # deployment or a downstream step once staging models land.

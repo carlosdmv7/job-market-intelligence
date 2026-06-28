@@ -1,0 +1,34 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Append-only landing zone written by the Prefect ingestion + enrichment
+      flows. Mirrors the jmi_core Pydantic contracts.
+    tables:
+      - name: raw_job_postings
+        description: One observation of one source's posting at one scrape time (event log).
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: { count: 36, period: hour }
+          error_after: { count: 72, period: hour }
+        columns:
+          - name: content_hash
+            description: Content version of a source posting; enrichment join key.
+            data_tests: [not_null]
+          - name: source
+            data_tests: [not_null]
+          - name: source_job_id
+            data_tests: [not_null]
+          - name: scraped_at
+            data_tests: [not_null]
+      - name: raw_job_enrichment
+        description: One LLM enrichment per content_hash.
+        columns:
+          - name: content_hash
+            data_tests: [not_null, unique]
+          - name: visa_status
+            data_tests:
+              - accepted_values:
+                  values: [explicit_yes, likely_yes, unclear, likely_no, explicit_no]

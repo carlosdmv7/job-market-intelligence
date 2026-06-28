@@ -1,0 +1,53 @@
+# Local 0€ stack: Ollama (LLM) + the Streamlit app.
+# Warehouse is MotherDuck (cloud free tier) so it's not a service here.
+#
+#   cp .env .env                # ensure motherduck_token is set
+#   docker compose -f infra/docker-compose.yml up --build
+#   docker compose -f infra/docker-compose.yml exec ollama ollama pull qwen2.5:7b
+#   open http://localhost:8501
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/docker/app.Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      JMI_LLM_PROVIDER: ollama
+      JMI_LLM_MODEL: ${JMI_LLM_MODEL:-qwen2.5:7b}
+      JMI_OLLAMA_HOST: http://ollama:11434
+      JMI_DUCKDB_DATABASE: ${JMI_DUCKDB_DATABASE:-md:job-market-intelligence}
+      motherduck_token: ${motherduck_token}
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # Optional: a Prefect worker that runs ingest/enrich on a schedule.
+  # Point PREFECT_API_URL at your centralized Prefect server, then enable.
+  # worker:
+  #   build:
+  #     context: ..
+  #     dockerfile: infra/docker/worker.Dockerfile
+  #   environment:
+  #     PREFECT_API_URL: ${PREFECT_API_URL}
+  #     JMI_LLM_PROVIDER: ollama
+  #     JMI_OLLAMA_HOST: http://ollama:11434
+  #     JMI_DUCKDB_DATABASE: ${JMI_DUCKDB_DATABASE:-md:job-market-intelligence}
+  #     motherduck_token: ${motherduck_token}
+  #   depends_on: [ollama]
+
+volumes:
+  ollama-models:

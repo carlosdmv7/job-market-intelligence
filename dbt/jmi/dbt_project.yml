@@ -1,0 +1,24 @@
+name: jmi
+version: 0.1.0
+config-version: 2
+profile: jmi
+require-dbt-version: ">=1.8.0"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  jmi:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: table
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

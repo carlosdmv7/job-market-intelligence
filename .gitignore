@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# uv
+uv.lock
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# DuckDB / local data
+*.duckdb
+*.duckdb.wal
+data/
+.cache/
+
+# dbt
+dbt/jmi/target/
+dbt/jmi/dbt_packages/
+dbt/jmi/logs/
+.user.yml
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage*
+
+# Logs
+*.log
+
+# Prefect
+.pref.*
+.prefectignore
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

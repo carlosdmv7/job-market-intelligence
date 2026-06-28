@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: FT_JOB_POSTING
+    description: Current-state fact — one row per deduplicated canonical posting + enrichment.
+    columns:
+      - name: job_posting_key
+        data_tests: [not_null, unique]
+      - name: company_key
+        data_tests:
+          - relationships:
+              to: ref('DT_COMPANY')
+              field: company_key
+              config:
+                where: "company_name is not null"
+      - name: source_key
+        data_tests:
+          - relationships: { to: ref('DT_SOURCE'), field: source_key }
+      - name: is_visa_sponsor
+        data_tests: [not_null]
+      - name: visa_status
+        data_tests:
+          - accepted_values:
+              values: [explicit_yes, likely_yes, unclear, likely_no, explicit_no]
+              config:
+                where: "visa_status is not null"
+
+  - name: FT_JOB_SNAPSHOT_DAILY
+    description: Daily snapshot fact — one row per source posting per observed day.
+    columns:
+      - name: snapshot_key
+        data_tests: [not_null, unique]
+      - name: date_key
+        data_tests: [not_null]
+
+  - name: DT_COMPANY
+    description: Company dimension (company_name + country grain).
+    columns:
+      - name: company_key
+        data_tests: [not_null, unique]
+
+  - name: DT_SOURCE
+    description: Source/platform dimension with country + type metadata.
+    columns:
+      - name: source_key
+        data_tests: [not_null, unique]
+      - name: source
+        data_tests: [not_null, unique]
+
+  - name: DT_DATE
+    description: Date dimension spine.
+    columns:
+      - name: date_key
+        data_tests: [not_null, unique]

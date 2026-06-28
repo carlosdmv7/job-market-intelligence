@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: int_job_postings_deduplicated
+    description: >
+      One row per canonical (cross-source) posting — the deduplicated current
+      state. canonical_job_id is the deterministic cluster key.
+    columns:
+      - name: canonical_job_id
+        description: Deterministic cross-source cluster id.
+        data_tests: [not_null, unique]
+      - name: content_hash
+        data_tests: [not_null]
+      - name: cluster_size
+        description: How many source postings collapsed into this canonical row.

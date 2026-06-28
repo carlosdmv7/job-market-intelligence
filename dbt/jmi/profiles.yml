@@ -1,0 +1,18 @@
+# For local dev keep this here (DBT_PROFILES_DIR=dbt/jmi) or copy to ~/.dbt/.
+# `dev` targets MotherDuck (reads the motherduck_token env var); `ci` uses a
+# local DuckDB file so `dbt build`/`parse` run with no cloud creds.
+jmi:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: duckdb
+      # Same DB as the Python stack (jmi_core settings). Token comes from the
+      # motherduck_token env var (the Makefile sources .env for this).
+      path: "{{ env_var('JMI_DUCKDB_DATABASE', 'md:job-market-intelligence') }}"
+      extensions: ["json"]
+      threads: 4
+    ci:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'jmi_ci.duckdb') }}"
+      extensions: ["json"]
+      threads: 4
