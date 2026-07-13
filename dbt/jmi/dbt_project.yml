@@ -22,3 +22,11 @@ models:
     marts:
       +materialized: table
       +schema: marts
+
+seeds:
+  jmi:
+    +schema: staging
+    recognised_sponsors:
+      +column_types:
+        organisation: varchar
+        kvk_number: varchar  # keep leading zeros; KvK is an identifier, not a number

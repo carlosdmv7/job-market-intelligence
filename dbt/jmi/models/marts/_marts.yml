@@ -17,6 +17,12 @@ models:
         data_tests:
           - relationships: { to: ref('DT_SOURCE'), field: source_key }
       - name: is_visa_sponsor
+        description: LLM read of the posting text (soft signal).
+        data_tests: [not_null]
+      - name: is_recognised_sponsor
+        description: >
+          Company is on the IND recognised-sponsor register — deterministic,
+          auditable (KvK), the primary visa signal. Independent of enrichment.
         data_tests: [not_null]
       - name: visa_status
         data_tests:
@@ -38,6 +44,9 @@ models:
     columns:
       - name: company_key
         data_tests: [not_null, unique]
+      - name: is_recognised_sponsor
+        description: Company is on the IND recognised-sponsor register.
+        data_tests: [not_null]
 
   - name: DT_SOURCE
     description: Source/platform dimension with country + type metadata.

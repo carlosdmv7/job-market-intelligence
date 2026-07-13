@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import streamlit as st
-
 from streamlit_app.db import run_df, table_exists
 
 st.set_page_config(page_title="Market Trends", page_icon="📈", layout="wide")

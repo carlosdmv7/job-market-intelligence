@@ -25,3 +25,13 @@ models:
               min_value: 0
               max_value: 1
               where: "visa_confidence is not null"
+
+  - name: stg_recognised_sponsors
+    description: >
+      IND recognised-sponsor register (NL), one row per normalized company name.
+      Deterministic, no-LLM lookup for the visa-sponsor flag. Refresh the seed
+      monthly with `make sponsors-refresh`.
+    columns:
+      - name: company_norm
+        description: Normalized company name (join key), via jmi_normalize_company.
+        data_tests: [not_null, unique]

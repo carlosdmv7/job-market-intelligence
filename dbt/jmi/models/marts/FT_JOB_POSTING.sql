@@ -7,6 +7,10 @@ with postings as (
 
 enrichment as (
     select * from {{ ref('stg_job_enrichment') }}
+),
+
+sponsors as (
+    select * from {{ ref('stg_recognised_sponsors') }}
 )
 
 select
@@ -43,7 +47,7 @@ select
     e.remote_policy,
     e.technologies,
 
-    -- killer feature
+    -- killer feature: LLM visa read (from the posting text)
     e.visa_status,
     e.visa_confidence,
     e.visa_evidence,
@@ -53,6 +57,12 @@ select
     e.english_sufficient,
     e.relocation_support,
     e.enrichment_confidence,
-    (e.content_hash is not null)                                  as is_enriched
+    (e.content_hash is not null)                                  as is_enriched,
+
+    -- killer feature: deterministic IND recognised-sponsor cross-reference
+    -- (the company is legally authorised to sponsor a NL work visa)
+    (s.company_norm is not null)                                  as is_recognised_sponsor,
+    s.kvk_number                                                  as sponsor_kvk
 from postings p
 left join enrichment e on p.content_hash = e.content_hash
+left join sponsors s on {{ jmi_normalize_company('p.company_name') }} = s.company_norm

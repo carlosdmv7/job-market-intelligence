@@ -6,6 +6,10 @@ with postings as (
     where company_name is not null
 ),
 
+sponsors as (
+    select * from {{ ref('stg_recognised_sponsors') }}
+),
+
 agg as (
     select
         company_name,
@@ -18,10 +22,15 @@ agg as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['company_name', 'country_code']) }} as company_key,
-    company_name,
-    country_code,
-    posting_count,
-    first_posting_at,
-    last_seen_at
-from agg
+    {{ dbt_utils.generate_surrogate_key(['a.company_name', 'a.country_code']) }} as company_key,
+    a.company_name,
+    a.country_code,
+    a.posting_count,
+    a.first_posting_at,
+    a.last_seen_at,
+    -- IND recognised sponsor cross-reference (deterministic, no LLM)
+    (s.company_norm is not null)     as is_recognised_sponsor,
+    s.kvk_number                     as sponsor_kvk
+from agg a
+left join sponsors s
+    on {{ jmi_normalize_company('a.company_name') }} = s.company_norm

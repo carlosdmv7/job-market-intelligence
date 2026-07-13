@@ -13,7 +13,7 @@ yield canonical :class:`~jmi_core.schema.raw.JobPosting` records;
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from jmi_core import SCHEMA_VERSION
@@ -147,7 +147,7 @@ class BaseScraper(ABC):
             source_url=source_url,
             apply_url=apply_url,
             ingestion_run_id=self.run_id,
-            scraped_at=datetime.now(timezone.utc),
+            scraped_at=datetime.now(UTC),
             title=title,
             company_name=company_name,
             company_url=company_url,
@@ -178,4 +178,4 @@ def parse_iso_dt(value: Any) -> datetime | None:
             dt = datetime.strptime(text[:10], "%Y-%m-%d")
         except ValueError:
             return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)

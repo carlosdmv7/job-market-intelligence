@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timezone
+from datetime import UTC
 
 from jmi_scrapers.jsonld import extract_jobposting_nodes, jobposting_to_fields
 
@@ -46,7 +46,7 @@ def test_maps_fields():
     assert fields["country_code"] == "NL"
     assert fields["employment_type_raw"] == "FULL_TIME"
     assert fields["salary_raw"] == "EUR 70000-90000 year"
-    assert fields["posted_at"].tzinfo == timezone.utc
+    assert fields["posted_at"].tzinfo == UTC
     assert fields["posted_at"].year == 2026 and fields["posted_at"].month == 6
     assert fields["valid_through"].day == 20
 

@@ -9,16 +9,15 @@ Each ``_parse`` is pure and unit-tested; ``scrape`` handles paging.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from jmi_core.logging import get_logger
 from jmi_core.schema import JobSource
-
 from jmi_scrapers.base import BaseScraper, parse_iso_dt
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
 
     from jmi_core.schema import JobPosting
     from jmi_core.settings import Settings
@@ -28,7 +27,7 @@ log = get_logger(__name__)
 
 def _unix_to_dt(value: Any) -> datetime | None:
     try:
-        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        return datetime.fromtimestamp(int(value), tz=UTC)
     except (TypeError, ValueError, OSError):
         return None
 
@@ -167,40 +166,67 @@ class AdzunaScraper(BaseScraper):
     source = JobSource.ADZUNA
     BASE_URL = "https://api.adzuna.com/v1/api/jobs"
     PER_PAGE = 50
+    #: Data-role queries swept by default (one Adzuna search per term), so a
+    #: single ingest yields a broad local corpus rather than one narrow role.
+    DEFAULT_WHATS: ClassVar[tuple[str, ...]] = (
+        "data engineer",
+        "analytics engineer",
+        "data analyst",
+        "data scientist",
+        "machine learning engineer",
+        "data platform",
+    )
 
-    def __init__(self, settings: Settings, *, country: str = "nl", what: str | None = None,
-                 **kwargs: Any) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        country: str = "nl",
+        what: str | None = None,
+        whats: Sequence[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(settings, **kwargs)
         self.country = country.lower()
-        self.what = what
+        # Priority: explicit list > single term > the default sweep.
+        self.whats = list(whats) if whats else ([what] if what else list(self.DEFAULT_WHATS))
 
     def scrape(self, limit: int) -> Iterator[JobPosting]:
         if not (self.settings.adzuna_app_id and self.settings.adzuna_app_key):
             raise RuntimeError("Adzuna requires ADZUNA_APP_ID and ADZUNA_APP_KEY")
-        page, count = 1, 0
-        while count < limit:
-            data = self.http.get_json(
-                f"{self.BASE_URL}/{self.country}/search/{page}",
-                params={
-                    "app_id": self.settings.adzuna_app_id,
-                    "app_key": self.settings.adzuna_app_key,
-                    "results_per_page": min(self.PER_PAGE, limit),
-                    "what": self.what or "data engineer",
-                    "content-type": "application/json",
-                },
-            )
-            results = data.get("results", [])
-            if not results:
+        per_query = max(1, -(-limit // len(self.whats)))  # ceil, spread across roles
+        seen: set[str] = set()
+        total = 0
+        for what in self.whats:
+            if total >= limit:
                 break
-            for record in results:
-                if count >= limit:
-                    return
-                posting = self._parse(record)
-                if posting is not None:
-                    count += 1
+            q_count, page = 0, 1
+            while q_count < per_query and total < limit:
+                data = self.http.get_json(
+                    f"{self.BASE_URL}/{self.country}/search/{page}",
+                    params={
+                        "app_id": self.settings.adzuna_app_id,
+                        "app_key": self.settings.adzuna_app_key,
+                        "results_per_page": self.PER_PAGE,
+                        "what": what,
+                        "content-type": "application/json",
+                    },
+                )
+                results = data.get("results", [])
+                if not results:
+                    break
+                for record in results:
+                    if q_count >= per_query or total >= limit:
+                        break
+                    posting = self._parse(record)
+                    if posting is None or posting.source_job_id in seen:
+                        continue
+                    seen.add(posting.source_job_id)
+                    q_count += 1
+                    total += 1
                     yield posting
-            page += 1
-        log.info("adzuna.scrape.done", country=self.country, count=count)
+                page += 1
+        log.info("adzuna.scrape.done", country=self.country, queries=len(self.whats), count=total)
 
     def _parse(self, record: dict[str, Any]) -> JobPosting | None:
         job_id = record.get("id")

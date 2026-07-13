@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 
 from jmi_core.logging import get_logger
 from jmi_core.schema import JobSource
-
 from jmi_scrapers.base import BaseScraper
 
 if TYPE_CHECKING:

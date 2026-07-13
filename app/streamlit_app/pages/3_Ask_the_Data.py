@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import streamlit as st
+from streamlit_app.agent import build_sql
+from streamlit_app.db import run_df, table_exists
 
 from jmi_core.settings import get_settings
 from jmi_enrichment.providers import get_provider
-
-from streamlit_app.agent import build_sql
-from streamlit_app.db import run_df, table_exists
 
 st.set_page_config(page_title="Ask the Data", page_icon="💬", layout="wide")
 st.title("💬 Ask the Data")

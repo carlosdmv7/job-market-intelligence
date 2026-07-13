@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from jmi_core.schema import JobSource
 from jmi_core.settings import Settings
-
 from jmi_scrapers.honeypot import HoneypotScraper
 
 SAMPLE_RECORD = {

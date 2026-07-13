@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all enrich dbt-deps dbt-build app clean
+.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl enrich sponsors-refresh dbt-deps dbt-build app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -50,8 +50,14 @@ ingest: ## Run the ingestion flow for one source (SOURCE=remotive)
 ingest-all: ## Ingest every free no-key source
 	@for s in remotive arbeitnow remoteok; do uv run python -m jmi_flows.ingest --source $$s; done
 
+ingest-nl: ## Ingest local NL jobs via Adzuna (needs ADZUNA_APP_ID/KEY) — the relocation corpus
+	uv run python -m jmi_flows.ingest --source adzuna
+
 enrich: ## Run the LLM enrichment flow
 	uv run python -m jmi_flows.enrich
+
+sponsors-refresh: ## Refresh the IND recognised-sponsor dbt seed (updated monthly)
+	uv run python -m jmi_scrapers.ind_sponsors
 
 dbt-deps: ## Install dbt package dependencies (dbt_utils)
 	cd dbt/jmi && uv run dbt deps

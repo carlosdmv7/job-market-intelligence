@@ -6,11 +6,11 @@ from jmi_scrapers.base import BaseScraper, HttpSession, ScrapflySession
 from jmi_scrapers.registry import DEFAULT_SOURCES, SCRAPERS, available, get_scraper
 
 __all__ = [
+    "DEFAULT_SOURCES",
+    "SCRAPERS",
     "BaseScraper",
     "HttpSession",
     "ScrapflySession",
-    "SCRAPERS",
-    "DEFAULT_SOURCES",
     "available",
     "get_scraper",
 ]

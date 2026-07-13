@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 _SCRIPT_RE = re.compile(
@@ -73,7 +73,7 @@ def _parse_dt(value: Any) -> datetime | None:
             dt = datetime.strptime(text[:10], "%Y-%m-%d")
         except ValueError:
             return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
 
 
 def _org_name(node: dict[str, Any]) -> str | None:

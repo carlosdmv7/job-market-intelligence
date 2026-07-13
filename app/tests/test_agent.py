@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from streamlit_app.agent import build_sql, clean_sql, enforce_limit, is_safe_select
 
 
