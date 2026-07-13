@@ -55,12 +55,12 @@ with left:
     )
     ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
 with right:
-    st.markdown("##### Top roles")
-    roles = run_df(
-        "select coalesce(normalized_role, '(unclassified)') as role, count(*) as n "
-        "from marts.FT_JOB_POSTING group by 1 order by n desc limit 10"
+    st.markdown("##### Jobs by location")
+    loc = run_df(
+        "select case when country_code is null then 'Remote / global' else country_code end "
+        "as location, count(*) as n from marts.FT_JOB_POSTING group by 1 order by n desc"
     )
-    ui.show(ui.hbar(roles, "role", "n", value_title="postings"))
+    ui.show(ui.hbar(loc, "location", "n", value_title="postings"))
 
 st.markdown("##### 🛂 Recognised visa sponsors hiring in the Netherlands")
 st.caption("Companies on the IND register with the most open roles — your best relocation leads.")

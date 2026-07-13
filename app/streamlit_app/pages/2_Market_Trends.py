@@ -50,18 +50,20 @@ companies = (
 )
 ui.show(companies)
 
-c1, c2 = st.columns(2, gap="large")
-with c1:
+left, right = st.columns(2, gap="large")
+with left:
     st.markdown("##### Postings by source")
-    src = run_df("select source, count(*) as postings from marts.FT_JOB_POSTING group by 1 order by 2 desc")
-    ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
-with c2:
-    st.markdown("##### Roles in demand")
-    roles = run_df(
-        "select coalesce(normalized_role, '(unclassified)') as role, count(*) as n "
-        "from marts.FT_JOB_POSTING group by 1 order by n desc limit 10"
+    src = run_df(
+        "select source, count(*) as postings from marts.FT_JOB_POSTING group by 1 order by 2 desc"
     )
-    ui.show(ui.hbar(roles, "role", "n", value_title="postings"))
+    ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
+with right:
+    st.markdown("##### Jobs by location")
+    loc = run_df(
+        "select case when country_code is null then 'Remote / global' else country_code end "
+        "as location, count(*) as n from marts.FT_JOB_POSTING group by 1 order by n desc"
+    )
+    ui.show(ui.hbar(loc, "location", "n", value_title="postings"))
 
 # --- temporal (needs accumulated daily snapshots) --------------------------
 st.divider()
