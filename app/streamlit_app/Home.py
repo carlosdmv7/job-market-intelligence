@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import streamlit as st
 
+from streamlit_app import ui
 from streamlit_app.db import run_df, table_exists
 
 st.set_page_config(page_title="Job Market Intelligence", page_icon="🧭", layout="wide")
 
 st.title("🧭 Job Market Intelligence")
-st.caption("Tech jobs across the EU, enriched for visa sponsorship & relocation fit.")
+st.caption(
+    "EU tech jobs, enriched for **visa sponsorship & relocation fit** — with an "
+    "auditable signal behind every flag."
+)
 
 if not table_exists("marts.FT_JOB_POSTING"):
     st.warning(
         "No marts yet. Run the pipeline first:\n\n"
-        "1. `make warehouse-init`\n2. `make ingest SOURCE=remotive`\n"
+        "1. `make warehouse-init`\n2. `make ingest-all` / `make ingest-nl`\n"
         "3. `make enrich`\n4. `make dbt-build`"
     )
     st.stop()
@@ -22,43 +26,55 @@ if not table_exists("marts.FT_JOB_POSTING"):
 totals = run_df(
     """
     select
-        count(*) as postings,
-        count(*) filter (where is_visa_sponsor) as visa_sponsors,
-        count(*) filter (where is_enriched) as enriched,
-        count(distinct company_name) as companies
+        count(*)                                                            as postings,
+        count(*) filter (where country_code = 'NL')                         as nl_postings,
+        count(*) filter (where country_code = 'NL' and is_recognised_sponsor) as nl_sponsor_jobs,
+        count(distinct company_name) filter (where is_recognised_sponsor)   as sponsor_companies
     from marts.FT_JOB_POSTING
     """
 ).iloc[0]
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Postings", f"{int(totals.postings):,}")
-c2.metric("Visa sponsors", f"{int(totals.visa_sponsors):,}")
-c3.metric("Enriched", f"{int(totals.enriched):,}")
-c4.metric("Companies", f"{int(totals.companies):,}")
+c2.metric("NL postings", f"{int(totals.nl_postings):,}")
+c3.metric(
+    "NL jobs at visa sponsors",
+    f"{int(totals.nl_sponsor_jobs):,}",
+    help="Company is on the IND register of employers authorised to sponsor a NL work visa.",
+)
+c4.metric("Recognised sponsor companies", f"{int(totals.sponsor_companies):,}")
 
-st.subheader("Postings by source")
-st.bar_chart(run_df("select source, count(*) as postings from marts.FT_JOB_POSTING group by source order by postings desc").set_index("source"))
+st.divider()
 
-left, right = st.columns(2)
+left, right = st.columns(2, gap="large")
 with left:
-    st.subheader("Top roles")
-    st.dataframe(
-        run_df(
-            "select coalesce(normalized_role, '(unclassified)') as role, count(*) as n "
-            "from marts.FT_JOB_POSTING group by 1 order by n desc limit 15"
-        ),
-        use_container_width=True,
-        hide_index=True,
+    st.markdown("##### Postings by source")
+    src = run_df(
+        "select source, count(*) as postings "
+        "from marts.FT_JOB_POSTING group by 1 order by 2 desc"
     )
+    ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
 with right:
-    st.subheader("Visa sponsorship breakdown")
-    st.dataframe(
-        run_df(
-            "select coalesce(visa_status, '(not enriched)') as visa_status, count(*) as n "
-            "from marts.FT_JOB_POSTING group by 1 order by n desc"
-        ),
-        use_container_width=True,
-        hide_index=True,
+    st.markdown("##### Top roles")
+    roles = run_df(
+        "select coalesce(normalized_role, '(unclassified)') as role, count(*) as n "
+        "from marts.FT_JOB_POSTING group by 1 order by n desc limit 10"
     )
+    ui.show(ui.hbar(roles, "role", "n", value_title="postings"))
 
-st.info("Pages → **Visa Sponsorship**, **Market Trends**, **Ask the Data** (text-to-SQL).")
+st.markdown("##### 🛂 Recognised visa sponsors hiring in the Netherlands")
+st.caption("Companies on the IND register with the most open roles — your best relocation leads.")
+top_sponsors = run_df(
+    """
+    select company_name as company, count(*) as openings
+    from marts.FT_JOB_POSTING
+    where country_code = 'NL' and is_recognised_sponsor
+    group by 1 order by openings desc limit 12
+    """
+)
+if top_sponsors.empty:
+    st.info("No recognised-sponsor postings yet — run `make ingest-nl` then `make dbt-build`.")
+else:
+    ui.show(ui.hbar(top_sponsors, "company", "openings", color=ui.GOOD, value_title="open roles"))
+
+st.info("Explore → **🛂 Visa Sponsorship**, **📈 Market Trends**, **💬 Ask the Data** (text-to-SQL).")

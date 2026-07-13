@@ -1,47 +1,122 @@
-"""Temporal trends from the daily snapshot fact."""
+"""Market composition + temporal trends from the marts."""
 
 from __future__ import annotations
 
+import altair as alt
 import streamlit as st
+from streamlit_app import ui
 from streamlit_app.db import run_df, table_exists
 
 st.set_page_config(page_title="Market Trends", page_icon="📈", layout="wide")
 st.title("📈 Market Trends")
+st.caption("What the EU tech market looks like right now, and how it moves over time.")
 
-if not table_exists("marts.FT_JOB_SNAPSHOT_DAILY"):
-    st.warning("Run the pipeline a few days + `make dbt-build` to accumulate snapshots.")
+if not table_exists("marts.FT_JOB_POSTING"):
+    st.warning("Run the pipeline + `make dbt-build` first.")
     st.stop()
 
-st.subheader("Active postings per day")
-st.line_chart(
-    run_df(
-        "select date_key, count(*) as active_postings "
-        "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key order by date_key"
-    ).set_index("date_key")
+# --- current composition ---------------------------------------------------
+st.markdown("##### Top hiring companies")
+st.caption("Green = on the IND recognised-sponsor register (can sponsor a NL visa).")
+comp = run_df(
+    """
+    select company_name,
+           max(cast(is_recognised_sponsor as int)) as sponsor,
+           count(*) as postings
+    from marts.FT_JOB_POSTING
+    where company_name is not null
+    group by 1 order by postings desc limit 15
+    """
 )
+comp["kind"] = comp["sponsor"].map({1: "Recognised sponsor", 0: "Other"})
+companies = (
+    alt.Chart(comp)
+    .mark_bar()
+    .encode(
+        y=alt.Y("company_name:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220)),
+        x=alt.X("postings:Q", title="postings", axis=alt.Axis(grid=True, tickCount=4)),
+        color=alt.Color(
+            "kind:N",
+            scale=alt.Scale(domain=["Recognised sponsor", "Other"], range=[ui.GOOD, ui.MUTED]),
+            title=None,
+        ),
+        tooltip=[
+            alt.Tooltip("company_name:N", title="company"),
+            alt.Tooltip("postings:Q"),
+            alt.Tooltip("kind:N", title="sponsor"),
+        ],
+    )
+    .properties(height=max(160, len(comp) * 30 + 12))
+)
+ui.show(companies)
 
-st.subheader("New postings per day (first seen)")
-st.bar_chart(
-    run_df(
-        "select date_key, count(*) as new_postings "
-        "from marts.FT_JOB_SNAPSHOT_DAILY where is_first_seen group by date_key order by date_key"
-    ).set_index("date_key")
-)
+c1, c2 = st.columns(2, gap="large")
+with c1:
+    st.markdown("##### Postings by source")
+    src = run_df("select source, count(*) as postings from marts.FT_JOB_POSTING group by 1 order by 2 desc")
+    ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
+with c2:
+    st.markdown("##### Roles in demand")
+    roles = run_df(
+        "select coalesce(normalized_role, '(unclassified)') as role, count(*) as n "
+        "from marts.FT_JOB_POSTING group by 1 order by n desc limit 10"
+    )
+    ui.show(ui.hbar(roles, "role", "n", value_title="postings"))
 
-st.subheader("Postings by source over time")
-pivot = run_df(
-    "select date_key, source, count(*) as n "
-    "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key, source order by date_key"
-)
-if not pivot.empty:
-    st.line_chart(pivot.pivot(index="date_key", columns="source", values="n").fillna(0))
+# --- temporal (needs accumulated daily snapshots) --------------------------
+st.divider()
+st.markdown("##### Over time")
+if not table_exists("marts.FT_JOB_SNAPSHOT_DAILY"):
+    st.info("Run the pipeline on a few different days to accumulate daily snapshots.")
+    st.stop()
 
-st.subheader("Top hiring companies")
-st.dataframe(
-    run_df(
-        "select company_name, count(distinct source_job_id) as postings "
-        "from marts.FT_JOB_SNAPSHOT_DAILY where is_last_seen group by 1 order by postings desc limit 20"
-    ),
-    use_container_width=True,
-    hide_index=True,
+daily = run_df(
+    "select date_key, count(*) as active_postings "
+    "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key order by date_key"
 )
+if len(daily) < 2:
+    st.info(
+        f"Only {len(daily)} snapshot day so far — trends appear once the pipeline "
+        "has run on multiple days (`make ingest-all` daily)."
+    )
+else:
+    line = (
+        alt.Chart(daily)
+        .mark_area(
+            line={"color": ui.BLUE, "strokeWidth": 2},
+            color=alt.Gradient(
+                gradient="linear",
+                stops=[
+                    alt.GradientStop(color="#ffffff", offset=0),
+                    alt.GradientStop(color=ui.BLUE, offset=1),
+                ],
+                x1=1, x2=1, y1=1, y2=0,
+            ),
+            opacity=0.25,
+        )
+        .encode(
+            x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+            y=alt.Y("active_postings:Q", title="active postings", axis=alt.Axis(grid=True)),
+            tooltip=[alt.Tooltip("date_key:T", title="day"), alt.Tooltip("active_postings:Q", title="active")],
+        )
+        .properties(height=260)
+    )
+    ui.show(line)
+
+    by_source = run_df(
+        "select date_key, source, count(*) as n "
+        "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key, source order by date_key"
+    )
+    st.markdown("##### Active postings by source over time")
+    multi = (
+        alt.Chart(by_source)
+        .mark_line(strokeWidth=2, point=True)
+        .encode(
+            x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+            y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
+            color=alt.Color("source:N", title=None),
+            tooltip=[alt.Tooltip("date_key:T", title="day"), "source:N", alt.Tooltip("n:Q", title="active")],
+        )
+        .properties(height=260)
+    )
+    ui.show(multi)

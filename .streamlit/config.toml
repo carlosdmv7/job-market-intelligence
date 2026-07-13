@@ -1,0 +1,18 @@
+# Streamlit theme — validated palette (dataviz skill), applied natively.
+# No CSS injection: only supported [theme] keys, so it survives version upgrades.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"            # brand blue (categorical slot 1)
+backgroundColor = "#fcfcfb"         # warm off-white surface
+secondaryBackgroundColor = "#f2f1ec" # cards / sidebar
+textColor = "#0b0b0b"               # primary ink
+linkColor = "#1c5cab"
+borderColor = "#e1e0d9"             # hairline
+baseRadius = "0.6rem"
+font = "sans-serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
