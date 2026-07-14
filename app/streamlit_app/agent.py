@@ -53,9 +53,26 @@ SYSTEM_PROMPT = (
 )
 
 _FORBIDDEN = (
-    "insert", "update", "delete", "drop", "create", "alter", "attach", "detach",
-    "copy", "pragma", "install", "load", "export", "truncate", "merge", "replace",
-    "grant", "revoke", "call", "set",
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "create",
+    "alter",
+    "attach",
+    "detach",
+    "copy",
+    "pragma",
+    "install",
+    "load",
+    "export",
+    "truncate",
+    "merge",
+    "replace",
+    "grant",
+    "revoke",
+    "call",
+    "set",
 )
 
 

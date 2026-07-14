@@ -50,7 +50,9 @@ def ingest_source(
     try:
         postings = list(scraper.scrape(limit))
         inserted = wh.insert_postings(postings)
-        log.info("ingest.done", source=source, scraped=len(postings), inserted=inserted, run_id=run_id)
+        log.info(
+            "ingest.done", source=source, scraped=len(postings), inserted=inserted, run_id=run_id
+        )
         return inserted
     finally:
         if owns_wh:

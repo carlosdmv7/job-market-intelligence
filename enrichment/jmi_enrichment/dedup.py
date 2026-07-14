@@ -41,9 +41,7 @@ def _norm(value: str | None) -> str:
     return _WS.sub(" ", _NON_ALNUM.sub(" ", value.lower())).strip()
 
 
-def canonical_key(
-    *, company_name: str | None, title: str | None, country_code: str | None
-) -> str:
+def canonical_key(*, company_name: str | None, title: str | None, country_code: str | None) -> str:
     """Deterministic cross-source cluster key (sha256 hex).
 
     Same recipe must be used in dbt (``int_job_postings_deduplicated``) so the

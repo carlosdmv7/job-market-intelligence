@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -72,7 +72,7 @@ class JobPosting(BaseModel):
     """Raw, as-scraped posting. The write contract for the `raw` schema."""
 
     model_config = ConfigDict(
-        extra="forbid",            # surface scraper field drift loudly
+        extra="forbid",  # surface scraper field drift loudly
         str_strip_whitespace=True,
         validate_assignment=True,
     )
@@ -81,23 +81,35 @@ class JobPosting(BaseModel):
     source: JobSource
     source_job_id: str = Field(..., min_length=1, description="The platform's own posting id")
     source_url: str
-    apply_url: str | None = Field(None, description="External apply link when it differs from source_url")
-    ingestion_run_id: str | None = Field(None, description="Prefect flow run id that produced this row")
+    apply_url: str | None = Field(
+        None, description="External apply link when it differs from source_url"
+    )
+    ingestion_run_id: str | None = Field(
+        None, description="Prefect flow run id that produced this row"
+    )
     scraped_at: datetime = Field(..., description="UTC, tz-aware; the observation timestamp")
 
     # --- core content (as posted) ----------------------------------------
     title: str = Field(..., min_length=1)
     company_name: str | None = Field(None, description="None for confidential/blind postings")
     company_url: str | None = None
-    description_raw: str | None = Field(None, description="Full description text or HTML, original language")
+    description_raw: str | None = Field(
+        None, description="Full description text or HTML, original language"
+    )
     detected_language: str | None = Field(
-        None, description="ISO 639-1, cheap detection at ingestion; enrichment may override", max_length=2
+        None,
+        description="ISO 639-1, cheap detection at ingestion; enrichment may override",
+        max_length=2,
     )
 
     # --- location --------------------------------------------------------
-    location_raw: str | None = Field(None, description="As posted, e.g. 'Amsterdam, North Holland, NL'")
+    location_raw: str | None = Field(
+        None, description="As posted, e.g. 'Amsterdam, North Holland, NL'"
+    )
     country_code: str | None = Field(
-        None, description="ISO 3166-1 alpha-2 when derivable at scrape time (e.g. Honeypot=NL)", max_length=2
+        None,
+        description="ISO 3166-1 alpha-2 when derivable at scrape time (e.g. Honeypot=NL)",
+        max_length=2,
     )
     is_remote_raw: bool | None = Field(None, description="Source's own remote flag, if exposed")
 
@@ -126,7 +138,7 @@ class JobPosting(BaseModel):
             return v
         if v.tzinfo is None:
             raise ValueError("datetime must be timezone-aware (UTC)")
-        return v.astimezone(timezone.utc)
+        return v.astimezone(UTC)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

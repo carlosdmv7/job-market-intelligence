@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     )
 
     # --- LLM enrichment (default: local Ollama, 0€) ----------------------
-    llm_provider: str = Field(default="ollama", validation_alias="JMI_LLM_PROVIDER")  # ollama|gemini|anthropic
+    llm_provider: str = Field(
+        default="ollama", validation_alias="JMI_LLM_PROVIDER"
+    )  # ollama|gemini|anthropic
     llm_model: str = Field(default="qwen2.5:7b", validation_alias="JMI_LLM_MODEL")
     ollama_host: str = Field(default="http://localhost:11434", validation_alias="JMI_OLLAMA_HOST")
     # Cap CPU threads so local inference doesn't peg the laptop (heat/throttle).

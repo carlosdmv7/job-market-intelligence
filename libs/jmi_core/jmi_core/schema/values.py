@@ -41,7 +41,9 @@ class VisaSponsorship(BaseModel):
     status: VisaSponsorshipStatus
     confidence: float = Field(..., ge=0.0, le=1.0)
     evidence: str | None = Field(
-        None, description="Verbatim snippet from the posting that justifies the status", max_length=1000
+        None,
+        description="Verbatim snippet from the posting that justifies the status",
+        max_length=1000,
     )
     reasoning: str | None = Field(
         None, description="One-sentence rationale from the model", max_length=500

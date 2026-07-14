@@ -9,7 +9,6 @@ from prefect.runtime import flow_run
 
 from jmi_core.logging import configure_logging
 from jmi_core.settings import get_settings
-
 from jmi_flows.pipeline import ingest_source
 
 

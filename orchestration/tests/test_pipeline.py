@@ -6,7 +6,7 @@ without Prefect, Scrapfly, or Anthropic.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -42,7 +42,7 @@ class FakeScraper:
                 source=JobSource.HONEYPOT,
                 source_job_id=f"hp-{i}",
                 source_url=f"https://honeypot.io/jobs/{i}",
-                scraped_at=datetime.now(timezone.utc),
+                scraped_at=datetime.now(UTC),
                 title=f"Data Engineer {i}",
                 company_name="Acme BV",
                 description_raw="We sponsor visas. dbt + Snowflake.",
@@ -60,7 +60,7 @@ class FakeClassifier:
                 content_hash=p["content_hash"],
                 source=JobSource(p["source"]),
                 source_job_id=p["source_job_id"],
-                enriched_at=datetime.now(timezone.utc),
+                enriched_at=datetime.now(UTC),
                 model="claude-haiku-4-5",
                 prompt_version="enrich/v1",
                 schema_version=jmi_core.SCHEMA_VERSION,
@@ -80,7 +80,9 @@ def test_ingest_then_enrich_end_to_end(wh):
     assert enriched == 3
     assert wh.fetch_postings_needing_enrichment() == []
 
-    rows = wh.query("SELECT count(*) AS n FROM raw.raw_job_enrichment WHERE visa_status='explicit_yes'")
+    rows = wh.query(
+        "SELECT count(*) AS n FROM raw.raw_job_enrichment WHERE visa_status='explicit_yes'"
+    )
     assert rows[0]["n"] == 3
 
 

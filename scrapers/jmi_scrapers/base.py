@@ -47,14 +47,24 @@ class HttpSession:
             transport=httpx.HTTPTransport(retries=2),
         )
 
-    def get_json(self, url: str, *, params: dict[str, Any] | None = None,
-                 headers: dict[str, str] | None = None) -> Any:
+    def get_json(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
         resp = self._client.get(url, params=params, headers=headers)
         resp.raise_for_status()
         return resp.json()
 
-    def get_text(self, url: str, *, params: dict[str, Any] | None = None,
-                 headers: dict[str, str] | None = None) -> str:
+    def get_text(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> str:
         resp = self._client.get(url, params=params, headers=headers)
         resp.raise_for_status()
         return resp.text
@@ -71,8 +81,9 @@ class ScrapflySession:
 
         self._client = ScrapflyClient(key=api_key)
 
-    def fetch(self, url: str, *, asp: bool = True, render_js: bool = False,
-              country: str | None = None) -> Any:
+    def fetch(
+        self, url: str, *, asp: bool = True, render_js: bool = False, country: str | None = None
+    ) -> Any:
         from scrapfly import ScrapeConfig  # lazy
 
         return self._client.scrape(

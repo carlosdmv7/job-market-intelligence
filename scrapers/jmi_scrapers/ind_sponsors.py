@@ -39,11 +39,36 @@ _SEED_PATH = (
 
 # Legal-form / noise tokens stripped before matching company names, so that
 # "ASML Netherlands B.V." and "ASML" collapse to the same key.
-_NOISE_TOKENS = frozenset({
-    "bv", "nv", "vof", "cv", "ua", "ba", "holding", "holdings", "group", "groep",
-    "international", "nederland", "netherlands", "the", "and", "inc", "ltd", "llc",
-    "gmbh", "sa", "company", "co", "corp", "corporation", "europe", "global",
-})
+_NOISE_TOKENS = frozenset(
+    {
+        "bv",
+        "nv",
+        "vof",
+        "cv",
+        "ua",
+        "ba",
+        "holding",
+        "holdings",
+        "group",
+        "groep",
+        "international",
+        "nederland",
+        "netherlands",
+        "the",
+        "and",
+        "inc",
+        "ltd",
+        "llc",
+        "gmbh",
+        "sa",
+        "company",
+        "co",
+        "corp",
+        "corporation",
+        "europe",
+        "global",
+    }
+)
 # Legal forms written with dots/spaces (b.v., n.v., v.o.f., ...) — removed before
 # punctuation stripping so they don't survive as stray single-letter tokens.
 _LEGAL_RE = re.compile(

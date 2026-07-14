@@ -92,14 +92,20 @@ else:
                     alt.GradientStop(color="#ffffff", offset=0),
                     alt.GradientStop(color=ui.BLUE, offset=1),
                 ],
-                x1=1, x2=1, y1=1, y2=0,
+                x1=1,
+                x2=1,
+                y1=1,
+                y2=0,
             ),
             opacity=0.25,
         )
         .encode(
             x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
             y=alt.Y("active_postings:Q", title="active postings", axis=alt.Axis(grid=True)),
-            tooltip=[alt.Tooltip("date_key:T", title="day"), alt.Tooltip("active_postings:Q", title="active")],
+            tooltip=[
+                alt.Tooltip("date_key:T", title="day"),
+                alt.Tooltip("active_postings:Q", title="active"),
+            ],
         )
         .properties(height=260)
     )
@@ -117,7 +123,11 @@ else:
             x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
             y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
             color=alt.Color("source:N", title=None),
-            tooltip=[alt.Tooltip("date_key:T", title="day"), "source:N", alt.Tooltip("n:Q", title="active")],
+            tooltip=[
+                alt.Tooltip("date_key:T", title="day"),
+                "source:N",
+                alt.Tooltip("n:Q", title="active"),
+            ],
         )
         .properties(height=260)
     )

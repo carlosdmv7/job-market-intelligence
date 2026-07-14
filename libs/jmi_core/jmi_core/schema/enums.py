@@ -1,16 +1,16 @@
 """Controlled vocabularies for the canonical JobPosting contract.
 
-All enums are ``str``-based so they serialize cleanly to JSON / DuckDB VARCHAR
-and remain dbt-friendly (you can `where seniority = 'senior'` without casts).
-Validation lives in Pydantic; the warehouse stores the raw string values.
+All enums are :class:`enum.StrEnum` so they serialize cleanly to JSON / DuckDB
+VARCHAR and remain dbt-friendly (you can `where seniority = 'senior'` without
+casts). Validation lives in Pydantic; the warehouse stores the raw string values.
 """
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class JobSource(str, Enum):
+class JobSource(StrEnum):
     """Where a posting was scraped from. One member per configured scraper."""
 
     # Free, no-registration public JSON APIs (the 0€ default set).
@@ -39,7 +39,7 @@ class JobSource(str, Enum):
 # ---------------------------------------------------------------------------
 
 
-class VisaSponsorshipStatus(str, Enum):
+class VisaSponsorshipStatus(StrEnum):
     """Visa sponsorship signal — the project's killer feature.
 
     ``explicit_no`` is deliberately distinct from ``unclear``: a posting that
@@ -47,14 +47,14 @@ class VisaSponsorshipStatus(str, Enum):
     *negative* filter, not merely an absence of signal.
     """
 
-    EXPLICIT_YES = "explicit_yes"   # posting explicitly offers sponsorship/relocation
-    LIKELY_YES = "likely_yes"       # strong implicit signals (intl team, "open to relocation")
-    UNCLEAR = "unclear"             # no signal either way
-    LIKELY_NO = "likely_no"         # implicit signals against (local-only language, gov contract)
-    EXPLICIT_NO = "explicit_no"     # posting explicitly rules out sponsorship
+    EXPLICIT_YES = "explicit_yes"  # posting explicitly offers sponsorship/relocation
+    LIKELY_YES = "likely_yes"  # strong implicit signals (intl team, "open to relocation")
+    UNCLEAR = "unclear"  # no signal either way
+    LIKELY_NO = "likely_no"  # implicit signals against (local-only language, gov contract)
+    EXPLICIT_NO = "explicit_no"  # posting explicitly rules out sponsorship
 
 
-class Seniority(str, Enum):
+class Seniority(StrEnum):
     INTERN = "intern"
     JUNIOR = "junior"
     MID = "mid"
@@ -65,15 +65,17 @@ class Seniority(str, Enum):
     UNKNOWN = "unknown"
 
 
-class RemotePolicy(str, Enum):
+class RemotePolicy(StrEnum):
     ONSITE = "onsite"
     HYBRID = "hybrid"
     REMOTE = "remote"
-    REMOTE_COUNTRY_RESTRICTED = "remote_country_restricted"  # remote but only from specific countries
+    REMOTE_COUNTRY_RESTRICTED = (
+        "remote_country_restricted"  # remote but only from specific countries
+    )
     UNKNOWN = "unknown"
 
 
-class EmploymentType(str, Enum):
+class EmploymentType(StrEnum):
     FULL_TIME = "full_time"
     PART_TIME = "part_time"
     CONTRACT = "contract"
@@ -83,7 +85,7 @@ class EmploymentType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class SalaryPeriod(str, Enum):
+class SalaryPeriod(StrEnum):
     YEAR = "year"
     MONTH = "month"
     DAY = "day"

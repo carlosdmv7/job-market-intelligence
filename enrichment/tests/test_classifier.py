@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from jmi_core.schema import RemotePolicy, Seniority, VisaSponsorship, VisaSponsorshipStatus
 from jmi_core.settings import Settings
 from jmi_enrichment.classifier import JobClassifier

@@ -9,9 +9,13 @@ number formats, k-suffixes, ranges, periods, gross/net, and ES/NL/DE/PT cues.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
+from typing import TypeVar
 
 from jmi_core.schema import SalaryPeriod
 from jmi_core.schema.values import Salary
+
+_T = TypeVar("_T")
 
 _CURRENCY = [
     ("EUR", ("€", "eur", "euro")),
@@ -21,8 +25,28 @@ _CURRENCY = [
 ]
 
 _PERIOD = [
-    (SalaryPeriod.YEAR, ("year", "yr", "annum", "annual", "p.a", "pa ", "/yr", "año", "anual", "jaar", "jahr", "ano", "anual")),
-    (SalaryPeriod.MONTH, ("month", "/mo", "p.m", "mensual", "mes", "maand", "monat", "mês", "mensal")),
+    (
+        SalaryPeriod.YEAR,
+        (
+            "year",
+            "yr",
+            "annum",
+            "annual",
+            "p.a",
+            "pa ",
+            "/yr",
+            "año",
+            "anual",
+            "jaar",
+            "jahr",
+            "ano",
+            "anual",
+        ),
+    ),
+    (
+        SalaryPeriod.MONTH,
+        ("month", "/mo", "p.m", "mensual", "mes", "maand", "monat", "mês", "mensal"),
+    ),
     (SalaryPeriod.DAY, ("day", "/day", "daily", "día", "dia", "dag", "tag")),
     (SalaryPeriod.HOUR, ("hour", "/hr", "hourly", "hora", "uur", "stunde")),
 ]
@@ -63,7 +87,7 @@ def _to_number(token: str) -> float | None:
         return None
 
 
-def _first(text: str, table: list[tuple[object, tuple[str, ...]]]) -> object | None:
+def _first(text: str, table: Sequence[tuple[_T, tuple[str, ...]]]) -> _T | None:
     for value, needles in table:
         if any(n in text for n in needles):
             return value
@@ -106,8 +130,8 @@ def parse_salary(raw: str | None) -> Salary | None:
     return Salary(
         min_amount=min_amount,
         max_amount=max_amount,
-        currency=currency,  # type: ignore[arg-type]
-        period=period,  # type: ignore[arg-type]
+        currency=currency,
+        period=period,
         is_gross=is_gross,
         is_estimated=is_estimated,
     )

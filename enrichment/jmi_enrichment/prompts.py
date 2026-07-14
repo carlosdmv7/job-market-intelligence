@@ -7,6 +7,7 @@ per-posting content goes in the user turn. Bumping the taxonomy is a
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
 from jmi_core.schema import (
@@ -46,7 +47,7 @@ visa.status — the killer signal. Choose the strongest supported option:
 
 For visa.evidence, quote the VERBATIM snippet (original language) that justifies
 the status, or null if status is "unclear". Keep visa.reasoning to one sentence.
-visa.confidence and enrichment_confidence are 0.0–1.0.
+visa.confidence and enrichment_confidence are 0.0-1.0.
 
 Language fields, judged for someone who speaks Spanish + English but not the
 local language:
@@ -86,7 +87,7 @@ def build_user_prompt(posting: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _vals(enum_cls: type) -> str:
+def _vals(enum_cls: type[StrEnum]) -> str:
     return "|".join(e.value for e in enum_cls)
 
 

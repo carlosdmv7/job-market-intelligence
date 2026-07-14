@@ -7,13 +7,12 @@ class adds lineage/cost metadata and builds the full ``JobEnrichment``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from jmi_core import SCHEMA_VERSION
 from jmi_core.logging import get_logger
 from jmi_core.schema import JobEnrichment, JobSource
-
 from jmi_enrichment.models import LLMJobClassification
 from jmi_enrichment.prompts import SYSTEM_PROMPT, build_user_prompt, json_output_instructions
 from jmi_enrichment.providers import ClassificationError, LLMProvider, get_provider
@@ -55,7 +54,7 @@ class JobClassifier:
             content_hash=posting["content_hash"],
             source=JobSource(posting["source"]),
             source_job_id=posting["source_job_id"],
-            enriched_at=datetime.now(timezone.utc),
+            enriched_at=datetime.now(UTC),
             model=self.provider.model,
             prompt_version=self.prompt_version,
             schema_version=SCHEMA_VERSION,

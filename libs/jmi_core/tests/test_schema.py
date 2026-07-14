@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -20,17 +20,17 @@ from jmi_core.schema import (
 
 
 def _posting(**overrides) -> JobPosting:
-    base = dict(
-        source=JobSource.HONEYPOT,
-        source_job_id="hp-1",
-        source_url="https://honeypot.io/jobs/1",
-        scraped_at=datetime(2026, 6, 26, 8, 0, tzinfo=timezone.utc),
-        title="Analytics Engineer",
-        company_name="Acme BV",
-        description_raw="We sponsor visas and offer relocation to NL.",
-        salary_raw="€60.000 - €75.000",
-        schema_version=jmi_core.SCHEMA_VERSION,
-    )
+    base = {
+        "source": JobSource.HONEYPOT,
+        "source_job_id": "hp-1",
+        "source_url": "https://honeypot.io/jobs/1",
+        "scraped_at": datetime(2026, 6, 26, 8, 0, tzinfo=UTC),
+        "title": "Analytics Engineer",
+        "company_name": "Acme BV",
+        "description_raw": "We sponsor visas and offer relocation to NL.",
+        "salary_raw": "€60.000 - €75.000",
+        "schema_version": jmi_core.SCHEMA_VERSION,
+    }
     base.update(overrides)
     return JobPosting(**base)
 
@@ -75,7 +75,7 @@ def test_enrichment_roundtrip():
         content_hash=p.content_hash,
         source=p.source,
         source_job_id=p.source_job_id,
-        enriched_at=datetime(2026, 6, 26, 8, 5, tzinfo=timezone.utc),
+        enriched_at=datetime(2026, 6, 26, 8, 5, tzinfo=UTC),
         model="claude-haiku-4-5",
         prompt_version="enrich/v1",
         schema_version=jmi_core.SCHEMA_VERSION,

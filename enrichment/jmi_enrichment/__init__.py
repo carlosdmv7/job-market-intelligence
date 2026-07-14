@@ -17,17 +17,17 @@ from jmi_enrichment.providers import (
 from jmi_enrichment.salary import parse_salary
 
 __all__ = [
+    "AnthropicProvider",
+    "ClassificationError",
+    "GeminiProvider",
     "JobClassifier",
     "LLMJobClassification",
     "LLMProvider",
     "LLMUsage",
     "OllamaProvider",
-    "GeminiProvider",
-    "AnthropicProvider",
-    "get_provider",
-    "ClassificationError",
-    "parse_salary",
     "canonical_key",
-    "normalize_title",
     "cosine_similarity",
+    "get_provider",
+    "normalize_title",
+    "parse_salary",
 ]

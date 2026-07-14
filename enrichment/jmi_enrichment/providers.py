@@ -299,8 +299,13 @@ class AnthropicProvider:
         cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
         output = getattr(usage, "output_tokens", 0) or 0
         return round(
-            (uncached * price_in + cache_write * price_in * 1.25 + cache_read * price_in * 0.1
-             + output * price_out) / 1_000_000,
+            (
+                uncached * price_in
+                + cache_write * price_in * 1.25
+                + cache_read * price_in * 0.1
+                + output * price_out
+            )
+            / 1_000_000,
             6,
         )
 

@@ -126,7 +126,9 @@ class Warehouse:
         propagation) is the most reliable path and avoids a stale shell
         ``motherduck_token`` shadowing the configured one.
         """
-        token = (self._motherduck_token or os.environ.get("motherduck_token") or "").strip()
+        # SIM112 wants an upper-case env var, but MotherDuck's DuckDB extension
+        # reads exactly `motherduck_token` (lower-case) — renaming breaks auth.
+        token = (self._motherduck_token or os.environ.get("motherduck_token") or "").strip()  # noqa: SIM112
         if not token:
             raise RuntimeError(
                 "MotherDuck token missing. Set `motherduck_token=...` in .env "
@@ -139,7 +141,7 @@ class Warehouse:
                 "Re-copy it from app.motherduck.com as a single line (a line break or stray "
                 "quotes/spaces in .env is the usual cause)."
             )
-        os.environ["motherduck_token"] = token  # the extension also reads this
+        os.environ["motherduck_token"] = token  # noqa: SIM112 — the extension reads this exact name
         if "motherduck_token=" in self.database:
             return self.database
         sep = "&" if "?" in self.database else "?"

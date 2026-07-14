@@ -27,7 +27,12 @@ VALID_JSON = json.dumps(
         "employment_type": "full_time",
         "remote_policy": "remote",
         "technologies": ["dbt", "snowflake"],
-        "visa": {"status": "explicit_yes", "confidence": 0.9, "evidence": "we sponsor", "reasoning": None},
+        "visa": {
+            "status": "explicit_yes",
+            "confidence": 0.9,
+            "evidence": "we sponsor",
+            "reasoning": None,
+        },
         "requires_local_language": False,
         "working_languages": ["en"],
         "english_sufficient": True,
@@ -47,7 +52,7 @@ def test_extract_json_plain_and_fenced():
 
 def test_ollama_provider_parses(monkeypatch):
     class FakeResp:
-        def raise_for_status(self):  # noqa: D401
+        def raise_for_status(self):
             return None
 
         def json(self):
@@ -59,7 +64,7 @@ def test_ollama_provider_parses(monkeypatch):
 
     captured = {}
 
-    def fake_post(url, json=None, timeout=None):  # noqa: A002
+    def fake_post(url, json=None, timeout=None):
         captured["url"] = url
         captured["json"] = json
         return FakeResp()

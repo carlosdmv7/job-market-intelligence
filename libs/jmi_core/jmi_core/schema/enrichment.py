@@ -11,7 +11,7 @@ content_hash downstream.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -45,12 +45,16 @@ class JobEnrichment(BaseModel):
     cost_usd: float | None = Field(None, ge=0)
 
     # --- normalized classifications --------------------------------------
-    normalized_role: str | None = Field(None, description="Canonical title, e.g. 'Analytics Engineer'")
+    normalized_role: str | None = Field(
+        None, description="Canonical title, e.g. 'Analytics Engineer'"
+    )
     role_family: str | None = Field(None, description="e.g. 'Data Engineering', 'Data Science'")
     seniority: Seniority = Seniority.UNKNOWN
     employment_type: EmploymentType = EmploymentType.UNKNOWN
     remote_policy: RemotePolicy = RemotePolicy.UNKNOWN
-    technologies: list[str] = Field(default_factory=list, description="Normalized tech/skill tokens")
+    technologies: list[str] = Field(
+        default_factory=list, description="Normalized tech/skill tokens"
+    )
 
     # --- killer feature: visa + relocation fit ---------------------------
     visa: VisaSponsorship
@@ -80,4 +84,4 @@ class JobEnrichment(BaseModel):
     def _ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
             raise ValueError("enriched_at must be timezone-aware (UTC)")
-        return v.astimezone(timezone.utc)
+        return v.astimezone(UTC)

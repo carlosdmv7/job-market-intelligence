@@ -8,7 +8,6 @@ from prefect import flow
 
 from jmi_core.logging import configure_logging
 from jmi_core.settings import get_settings
-
 from jmi_flows.pipeline import enrich_pending
 
 

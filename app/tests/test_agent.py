@@ -59,7 +59,9 @@ class FakeProvider:
 
 
 def test_build_sql_happy_path():
-    p = FakeProvider("```sql\nselect country_code, count(*) from marts.FT_JOB_POSTING group by 1\n```")
+    p = FakeProvider(
+        "```sql\nselect country_code, count(*) from marts.FT_JOB_POSTING group by 1\n```"
+    )
     sql = build_sql("postings per country", p)
     assert sql.lower().startswith("select")
     assert "LIMIT" in sql

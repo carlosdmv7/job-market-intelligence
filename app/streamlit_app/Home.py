@@ -50,8 +50,7 @@ left, right = st.columns(2, gap="large")
 with left:
     st.markdown("##### Postings by source")
     src = run_df(
-        "select source, count(*) as postings "
-        "from marts.FT_JOB_POSTING group by 1 order by 2 desc"
+        "select source, count(*) as postings from marts.FT_JOB_POSTING group by 1 order by 2 desc"
     )
     ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
 with right:
@@ -77,4 +76,6 @@ if top_sponsors.empty:
 else:
     ui.show(ui.hbar(top_sponsors, "company", "openings", color=ui.GOOD, value_title="open roles"))
 
-st.info("Explore → **🛂 Visa Sponsorship**, **📈 Market Trends**, **💬 Ask the Data** (text-to-SQL).")
+st.info(
+    "Explore → **🛂 Visa Sponsorship**, **📈 Market Trends**, **💬 Ask the Data** (text-to-SQL)."
+)

@@ -28,7 +28,7 @@ SCRAPERS: dict[str, type[BaseScraper]] = {
     "remotive": RemotiveScraper,
     "arbeitnow": ArbeitnowScraper,
     "remoteok": RemoteOkScraper,
-    "adzuna": AdzunaScraper,      # needs ADZUNA_APP_ID / ADZUNA_APP_KEY
+    "adzuna": AdzunaScraper,  # needs ADZUNA_APP_ID / ADZUNA_APP_KEY
     "honeypot": HoneypotScraper,  # confirm API before relying on it
 }
 

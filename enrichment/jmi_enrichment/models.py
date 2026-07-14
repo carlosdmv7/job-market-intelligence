@@ -47,9 +47,7 @@ class LLMJobClassification(BaseModel):
     working_languages: list[str] | None = Field(
         None, description="ISO 639-1 codes the role requires/uses"
     )
-    english_sufficient: bool | None = Field(
-        None, description="True if English alone is enough"
-    )
+    english_sufficient: bool | None = Field(None, description="True if English alone is enough")
     relocation_support: bool | None = Field(
         None, description="True if relocation assistance is mentioned (distinct from visa)"
     )
