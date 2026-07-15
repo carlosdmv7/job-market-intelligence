@@ -58,6 +58,10 @@ SYSTEM_PROMPT = (
     "- Always include a LIMIT (<= 500).\n\n" + MARTS_SCHEMA
 )
 
+# "replace" is deliberately absent: as a bare word it is the legitimate scalar
+# function replace(col, a, b); its dangerous forms (CREATE OR REPLACE,
+# INSERT OR REPLACE) are already rejected twice — by the SELECT/WITH-only
+# check and by the "create"/"insert" keywords below.
 _FORBIDDEN = (
     "insert",
     "update",
@@ -74,7 +78,6 @@ _FORBIDDEN = (
     "export",
     "truncate",
     "merge",
-    "replace",
     "grant",
     "revoke",
     "call",

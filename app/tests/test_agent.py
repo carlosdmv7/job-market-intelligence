@@ -16,6 +16,10 @@ def test_clean_sql_strips_fences():
     [
         "select * from marts.FT_JOB_POSTING",
         "WITH x as (select 1) select * from x",
+        # replace() the scalar function is legitimate SQL, not a write.
+        "select replace(company_name, ' B.V.', '') from marts.DT_COMPANY",
+        # offset must not trip the "set" keyword.
+        "select title from marts.FT_JOB_POSTING limit 10 offset 20",
     ],
 )
 def test_safe_selects_pass(sql):
@@ -32,6 +36,10 @@ def test_safe_selects_pass(sql):
         "update marts.DT_COMPANY set company_name='x'",
         "attach 'evil.db'",
         "pragma database_list",
+        # the write-flavoured REPLACEs stay rejected by other layers
+        "create or replace table x as select 1",
+        "insert or replace into x select 1",
+        "with x as (select 1) insert into y select * from x",
     ],
 )
 def test_unsafe_rejected(sql):

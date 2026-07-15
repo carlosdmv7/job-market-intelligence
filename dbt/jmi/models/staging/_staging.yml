@@ -35,3 +35,10 @@ models:
       - name: company_norm
         description: Normalized company name (join key), via jmi_normalize_company.
         data_tests: [not_null, unique]
+      - name: organisation
+        data_tests: [not_null]
+      - name: kvk_number
+        description: >
+          KvK (Chamber of Commerce) number — the audit trail for a sponsor
+          match. Nullable on purpose: a handful of register entries are public
+          bodies (e.g. ACM, JETRO) that the IND lists without a KvK number.

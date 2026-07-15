@@ -3,9 +3,27 @@ version: 2
 models:
   - name: FT_JOB_POSTING
     description: Current-state fact — one row per deduplicated canonical posting + enrichment.
+    data_tests:
+      # sponsor_kvk can only come from the IND register join, so a KvK without
+      # the flag means the join logic broke. The converse is NOT an invariant:
+      # four register entries (public bodies like ACM) legitimately have no KvK.
+      - dbt_utils.expression_is_true:
+          expression: "is_recognised_sponsor or sponsor_kvk is null"
+          config:
+            alias: ft_posting_kvk_implies_sponsor_flag
     columns:
       - name: job_posting_key
         data_tests: [not_null, unique]
+      - name: canonical_job_id
+        description: Grain — one row per cross-source deduplicated posting.
+        data_tests: [not_null, unique]
+      - name: enrichment_confidence
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              config:
+                where: "enrichment_confidence is not null"
       - name: company_key
         data_tests:
           - relationships:
@@ -33,6 +51,11 @@ models:
 
   - name: FT_JOB_SNAPSHOT_DAILY
     description: Daily snapshot fact — one row per source posting per observed day.
+    data_tests:
+      # The grain, stated in business terms (snapshot_key uniqueness alone
+      # would hide a bad key recipe).
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [date_key, source, source_job_id]
     columns:
       - name: snapshot_key
         data_tests: [not_null, unique]
@@ -41,6 +64,11 @@ models:
 
   - name: DT_COMPANY
     description: Company dimension (company_name + country grain).
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "is_recognised_sponsor or sponsor_kvk is null"
+          config:
+            alias: dt_company_kvk_implies_sponsor_flag
     columns:
       - name: company_key
         data_tests: [not_null, unique]
