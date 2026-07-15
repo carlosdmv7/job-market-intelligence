@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from streamlit_app import ui
-from streamlit_app.db import run_df, table_exists
+from streamlit_app.db import require_marts, run_df
 
 st.set_page_config(page_title="Job Market Intelligence", page_icon="🧭", layout="wide")
 
@@ -15,13 +15,14 @@ st.caption(
     "auditable signal behind every flag."
 )
 
-if not table_exists("marts.FT_JOB_POSTING"):
-    st.warning(
-        "No marts yet. Run the pipeline first:\n\n"
+require_marts(
+    "marts.FT_JOB_POSTING",
+    missing=(
+        "Connected to the warehouse, but it has no marts yet. Run the pipeline:\n\n"
         "1. `make warehouse-init`\n2. `make ingest-all` / `make ingest-nl`\n"
         "3. `make enrich`\n4. `make dbt-build`"
-    )
-    st.stop()
+    ),
+)
 
 totals = run_df(
     """

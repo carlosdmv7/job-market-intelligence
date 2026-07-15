@@ -5,15 +5,16 @@ from __future__ import annotations
 import altair as alt
 import streamlit as st
 from streamlit_app import ui
-from streamlit_app.db import run_df, table_exists
+from streamlit_app.db import require_marts, run_df
 
 st.set_page_config(page_title="Market Trends", page_icon="📈", layout="wide")
 st.title("📈 Market Trends")
 st.caption("What the EU tech market looks like right now, and how it moves over time.")
 
-if not table_exists("marts.FT_JOB_POSTING"):
-    st.warning("Run the pipeline + `make dbt-build` first.")
-    st.stop()
+require_marts(
+    "marts.FT_JOB_POSTING",
+    missing="Connected, but no marts yet — run the pipeline, then `make dbt-build`.",
+)
 
 # --- current composition ---------------------------------------------------
 st.markdown("##### Top hiring companies")
@@ -68,9 +69,11 @@ with right:
 # --- temporal (needs accumulated daily snapshots) --------------------------
 st.divider()
 st.markdown("##### Over time")
-if not table_exists("marts.FT_JOB_SNAPSHOT_DAILY"):
-    st.info("Run the pipeline on a few different days to accumulate daily snapshots.")
-    st.stop()
+require_marts(
+    "marts.FT_JOB_SNAPSHOT_DAILY",
+    missing="Run the pipeline on a few different days to accumulate daily snapshots.",
+    level="info",
+)
 
 daily = run_df(
     "select date_key, count(*) as active_postings "

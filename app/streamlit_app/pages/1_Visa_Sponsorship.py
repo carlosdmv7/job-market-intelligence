@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import streamlit as st
 from streamlit_app import ui
-from streamlit_app.db import run_df, table_exists
+from streamlit_app.db import require_marts, run_df
 
 st.set_page_config(page_title="Visa Sponsorship", page_icon="🛂", layout="wide")
 st.title("🛂 Visa Sponsorship")
@@ -19,9 +19,10 @@ st.caption(
     "verifiable by KvK number. The LLM's read of the posting text is a secondary signal."
 )
 
-if not table_exists("marts.FT_JOB_POSTING"):
-    st.warning("Run the pipeline + `make dbt-build` first.")
-    st.stop()
+require_marts(
+    "marts.FT_JOB_POSTING",
+    missing="Connected, but no marts yet — run the pipeline, then `make dbt-build`.",
+)
 
 # --- filters ---------------------------------------------------------------
 countries = run_df(
