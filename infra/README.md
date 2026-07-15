@@ -23,14 +23,15 @@ docker compose -f infra/docker-compose.yml exec ollama ollama pull qwen2.5:7b
 
 ## Orchestration
 
-Flows + deployments live in `../orchestration` (`prefect.yaml`). Deploy them to
-your centralized Prefect server's `jmi-pool` work pool:
+What actually schedules this project is **GitHub Actions**
+(`.github/workflows/pipeline.yml`): a daily `ingest → enrich → dbt build`, the
+0€ substitute for an always-on worker. The flows are Prefect-instrumented, so
+every run — scheduled or manual `make` — reports state and logs to Prefect
+Cloud.
 
-```bash
-cd orchestration && prefect deploy --all
-```
-
-The worker container (or an EC2 worker) runs `prefect worker start --pool jmi-pool`.
+`../orchestration/prefect.yaml` documents the worker-based path (deployments +
+`jmi-pool` + `worker.Dockerfile`) for when an always-on machine is available;
+it is deliberately not deployed today because that machine wouldn't be free.
 
 ## AWS notes (improvement section)
 

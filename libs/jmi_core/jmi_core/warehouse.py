@@ -212,6 +212,9 @@ class Warehouse:
         FROM latest l
         LEFT JOIN raw.raw_job_enrichment e USING (content_hash)
         WHERE e.content_hash IS NULL
+        -- NL first: the relocation corpus is the one the visa signal exists for,
+        -- so a quota-capped batch must never spend itself on remote-board rows.
+        ORDER BY (l.country_code = 'NL') DESC NULLS LAST, l.scraped_at DESC
         LIMIT ?
         """
         return self.query(sql, [limit])

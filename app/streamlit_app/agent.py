@@ -26,18 +26,24 @@ marts.FT_JOB_POSTING  -- one row per deduplicated current posting
   normalized_role, role_family, seniority, employment_type, remote_policy,
   technologies (VARCHAR[]), visa_status, visa_confidence (0..1), visa_evidence,
   is_visa_sponsor (bool), requires_local_language (bool), working_languages (VARCHAR[]),
-  english_sufficient (bool), relocation_support (bool), is_enriched (bool)
+  english_sufficient (bool), relocation_support (bool),
+  enrichment_confidence (0..1), is_enriched (bool),
+  is_recognised_sponsor (bool)  -- company is on the official IND register (NL visa sponsor)
+  sponsor_kvk                   -- Dutch Chamber of Commerce number proving it
 
 marts.FT_JOB_SNAPSHOT_DAILY  -- one row per source posting per observed day
   date_key (date), source, company_name, country_code, title,
   is_first_seen (bool), is_last_seen (bool), days_since_first_seen (int)
 
-marts.DT_COMPANY (company_name, country_code, posting_count, first_posting_at, last_seen_at)
+marts.DT_COMPANY (company_name, country_code, posting_count, first_posting_at,
+                  last_seen_at, is_recognised_sponsor (bool), sponsor_kvk)
 marts.DT_SOURCE  (source, primary_country, source_type, is_remote_first)
-marts.DT_DATE    (date_key, year, month, year_month, day_of_week, is_weekend)
+marts.DT_DATE    (date_key, year, month, day_of_month, year_month, day_of_week, is_weekend)
 
 Tips:
-- visa sponsors: WHERE is_visa_sponsor. Strongest signal: visa_status='explicit_yes'.
+- Visa sponsorship, strongest signal: WHERE is_recognised_sponsor — deterministic match
+  against the official IND register, verifiable via sponsor_kvk. The LLM's read of the
+  posting text (is_visa_sponsor, visa_status='explicit_yes') is a secondary signal.
 - array membership: list_contains(technologies, 'dbt').
 - trends over time: group marts.FT_JOB_SNAPSHOT_DAILY by date_key.
 """

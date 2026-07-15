@@ -1,0 +1,72 @@
+name: Daily pipeline
+
+# The 0-cost scheduler: GitHub Actions runs the same Make-driven pipeline a
+# Prefect worker would, and every flow run is still tracked in Prefect Cloud
+# (the @flow wrappers report there via PREFECT_API_KEY/URL when configured).
+#
+# Daily cadence is what feeds marts.FT_JOB_SNAPSHOT_DAILY — the Market Trends
+# "over time" charts only accumulate history if this actually runs every day.
+
+on:
+  schedule:
+    - cron: "15 5 * * *" # 07:15 Europe/Amsterdam (CEST) — before the workday
+  workflow_dispatch: # manual runs for testing / catch-up
+
+concurrency:
+  group: daily-pipeline
+  cancel-in-progress: false # never kill a half-finished warehouse write
+
+jobs:
+  pipeline:
+    name: ingest -> enrich -> dbt build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      motherduck_token: ${{ secrets.MOTHERDUCK_TOKEN }}
+      JMI_DUCKDB_DATABASE: md:job-market-intelligence
+      ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+      ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      JMI_LLM_PROVIDER: gemini
+      JMI_LLM_MODEL: gemini-2.5-flash-lite
+      # Optional: report flow runs to Prefect Cloud when both are set.
+      PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # One flaky job board must not cost the day's snapshot, so each source
+      # ingests independently; a failure stays visible as a red step.
+      - name: Ingest — Adzuna NL (the relocation corpus)
+        continue-on-error: true
+        run: uv run python -m jmi_flows.ingest --source adzuna
+
+      - name: Ingest — free remote boards
+        continue-on-error: true
+        run: |
+          for s in remotive arbeitnow remoteok; do
+            uv run python -m jmi_flows.ingest --source "$s" || true
+          done
+
+      # ~50 postings/day stays comfortably inside the Gemini free daily quota;
+      # NL rows are enriched first (see fetch_postings_needing_enrichment).
+      - name: Enrich pending postings (LLM)
+        continue-on-error: true
+        run: uv run python -m jmi_flows.enrich --limit 50
+
+      - name: dbt build (staging -> marts)
+        working-directory: dbt/jmi
+        run: |
+          uv run dbt deps
+          uv run dbt build
