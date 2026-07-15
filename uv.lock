@@ -1549,6 +1549,7 @@ name = "job-market-intelligence"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "jmi-app" },
     { name = "jmi-core" },
     { name = "jmi-enrichment" },
     { name = "jmi-flows" },
@@ -1567,6 +1568,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jmi-app", editable = "app" },
     { name = "jmi-core", editable = "libs/jmi_core" },
     { name = "jmi-enrichment", editable = "enrichment" },
     { name = "jmi-flows", editable = "orchestration" },

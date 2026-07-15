@@ -4,11 +4,15 @@ version = "0.1.0"
 description = "Job Market Intelligence Engine — end-to-end DE/AE/LLM portfolio + relocation tool"
 requires-python = ">=3.11"
 # The root is a thin meta-package; real code lives in the workspace members below.
+# Streamlit Community Cloud resolves dependencies with uv (uv.lock outranks
+# requirements.txt in its precedence order), and it installs *this* root project
+# — so every member the deployed app imports must be listed here, jmi-app included.
 dependencies = [
     "jmi-core",
     "jmi-scrapers",
     "jmi-enrichment",
     "jmi-flows",
+    "jmi-app",
 ]
 
 [dependency-groups]
