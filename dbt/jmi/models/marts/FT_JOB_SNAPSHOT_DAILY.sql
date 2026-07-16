@@ -11,6 +11,7 @@ with observations as (
         source,
         source_job_id,
         content_hash,
+        scraped_at,
         scraped_date,
         company_name,
         country_code,
@@ -28,16 +29,21 @@ lifespan as (
     group by 1, 2
 ),
 
+-- A posting can be observed more than once per day (re-scrapes, content
+-- edits between passes). The grain is per DAY, so collapse to the day's
+-- last observation — otherwise two content versions of one job duplicate
+-- the snapshot_key.
 daily as (
-    select distinct
+    select
         source,
         source_job_id,
         scraped_date,
-        content_hash,
-        company_name,
-        country_code,
-        title
+        arg_max(content_hash, scraped_at)  as content_hash,
+        arg_max(company_name, scraped_at)  as company_name,
+        arg_max(country_code, scraped_at)  as country_code,
+        arg_max(title, scraped_at)         as title
     from observations
+    group by 1, 2, 3
 )
 
 select
