@@ -2,17 +2,22 @@
 
 ```
  free public job APIs (Remotive, Arbeitnow, RemoteOK)        [httpx, no key]
+ Adzuna per-country search (NL — the relocation corpus)      [httpx, free key]
             │  jmi_scrapers → canonical JobPosting
             ▼
- Prefect flows (orchestration/jmi_flows)
+ Prefect-instrumented flows (orchestration/jmi_flows), run daily by
+ GitHub Actions (.github/workflows/pipeline.yml)
    ingest  ──────────────►  raw.raw_job_postings   (append-only event log)
-   enrich  ── local LLM ──►  raw.raw_job_enrichment (1 row per content_hash)
-            │                         (Ollama by default; Gemini/Anthropic optional)
+   enrich  ──── LLM ─────►  raw.raw_job_enrichment (1 row per content_hash)
+            │                         (Gemini free tier; Ollama/Anthropic optional)
             ▼
+ IND recognised-sponsor register (~12.8k employers) ─► dbt seed
+            │
  MotherDuck (DuckDB)  —  dbt medallion (dbt/jmi)
-   staging.stg_*            cleaning
+   staging.stg_*            cleaning + normalized sponsor register
    staging.int_*            cross-source dedup  (canonical_job_id)
    marts.FT_/DT_*           dimensional model + FT_JOB_SNAPSHOT_DAILY
+                            + deterministic is_recognised_sponsor/sponsor_kvk
             │
             ▼
  Streamlit app (app/streamlit_app)

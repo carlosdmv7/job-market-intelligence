@@ -84,8 +84,20 @@ def enrich_pending(
         if not pending:
             log.info("enrich.nothing_pending")
             return 0
-        enrichments = list(classifier.classify_many(pending))
-        upserted = wh.upsert_enrichments(enrichments)
+        # Upsert in small chunks so an interrupted batch (laptop suspend, CI
+        # timeout, quota exhaustion mid-run) keeps everything classified so
+        # far — LLM minutes are the scarce resource here, never re-spend them.
+        chunk_size = 10
+        upserted = 0
+        chunk: list[Any] = []
+        for enrichment in classifier.classify_many(pending):
+            chunk.append(enrichment)
+            if len(chunk) >= chunk_size:
+                upserted += wh.upsert_enrichments(chunk)
+                log.info("enrich.progress", upserted=upserted, pending=len(pending))
+                chunk = []
+        if chunk:
+            upserted += wh.upsert_enrichments(chunk)
         log.info("enrich.done", pending=len(pending), enriched=upserted)
         return upserted
     finally:
