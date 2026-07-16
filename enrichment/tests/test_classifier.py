@@ -74,3 +74,30 @@ def test_classify_builds_full_enrichment():
 def test_classify_many_skips_failures():
     clf = JobClassifier(Settings(), provider=FakeProvider(raise_error=True))
     assert list(clf.classify_many([POSTING, POSTING])) == []
+
+
+def test_classify_many_opens_circuit_on_consecutive_failures():
+    """An exhausted quota must not burn a retry cycle per remaining posting."""
+    provider = FakeProvider(raise_error=True)
+    clf = JobClassifier(Settings(), provider=provider)
+    batch = [POSTING] * (JobClassifier.MAX_CONSECUTIVE_FAILURES * 3)
+
+    assert list(clf.classify_many(batch)) == []
+    assert len(provider.calls) == JobClassifier.MAX_CONSECUTIVE_FAILURES
+
+
+def test_classify_many_success_resets_the_circuit():
+    class FlakyProvider(FakeProvider):
+        def classify(self, *, system, user, schema):
+            # fail, succeed, fail, succeed, ... — never 5 consecutive failures
+            flaky = len(self.calls) % 2 == 0
+            self.calls.append({})
+            if flaky:
+                raise ClassificationError("boom")
+            return self._result, LLMUsage(input_tokens=1, output_tokens=1, cost_usd=0.0)
+
+    provider = FlakyProvider()
+    clf = JobClassifier(Settings(), provider=provider)
+    out = list(clf.classify_many([POSTING] * 12))
+    assert len(out) == 6  # every other call succeeds; the circuit never opens
+    assert len(provider.calls) == 12

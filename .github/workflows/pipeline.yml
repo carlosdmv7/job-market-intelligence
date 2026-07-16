@@ -61,8 +61,12 @@ jobs:
 
       # ~50 postings/day stays comfortably inside the Gemini free daily quota;
       # NL rows are enriched first (see fetch_postings_needing_enrichment).
+      # Enrichment is best-effort: it must never eat the job's time budget and
+      # starve dbt build (the classifier also opens a circuit breaker after 5
+      # consecutive provider failures, e.g. an exhausted daily quota).
       - name: Enrich pending postings (LLM)
         continue-on-error: true
+        timeout-minutes: 15
         run: uv run python -m jmi_flows.enrich --limit 50
 
       - name: dbt build (staging -> marts)

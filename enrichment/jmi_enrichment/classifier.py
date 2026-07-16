@@ -38,14 +38,27 @@ class JobClassifier:
         )
         return self._to_enrichment(posting, result, usage)
 
+    #: Consecutive provider failures after which the batch aborts. When a
+    #: free-tier daily quota is exhausted, every remaining posting would burn
+    #: ~a minute of retries just to fail — skipped rows stay pending and the
+    #: next scheduled run picks them up, so giving up early loses nothing.
+    MAX_CONSECUTIVE_FAILURES = 5
+
     def classify_many(self, postings: Iterable[dict[str, Any]]) -> Iterator[JobEnrichment]:
+        consecutive_failures = 0
         for posting in postings:
             try:
                 yield self.classify(posting)
+                consecutive_failures = 0
             except ClassificationError as exc:
                 log.warning("enrich.skip", content_hash=posting.get("content_hash"), error=str(exc))
+                consecutive_failures += 1
             except Exception as exc:  # network / rate limit / unexpected
                 log.error("enrich.error", content_hash=posting.get("content_hash"), error=str(exc))
+                consecutive_failures += 1
+            if consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                log.error("enrich.circuit_open", consecutive_failures=consecutive_failures)
+                break
 
     def _to_enrichment(
         self, posting: dict[str, Any], result: LLMJobClassification, usage: Any
