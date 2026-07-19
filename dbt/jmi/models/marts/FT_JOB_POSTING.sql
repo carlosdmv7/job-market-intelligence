@@ -51,6 +51,7 @@ select
     e.visa_status,
     e.visa_confidence,
     e.visa_evidence,
+    e.visa_reasoning,
     coalesce(e.is_visa_sponsor, false)                            as is_visa_sponsor,
     e.requires_local_language,
     e.working_languages,
@@ -58,6 +59,12 @@ select
     e.relocation_support,
     e.enrichment_confidence,
     (e.content_hash is not null)                                  as is_enriched,
+
+    -- enrichment provenance: which model/prompt produced the read, and when —
+    -- the app's detail view shows this so every LLM claim is attributable
+    e.model                                                       as enrichment_model,
+    e.prompt_version                                              as enrichment_prompt_version,
+    e.enriched_at,
 
     -- killer feature: deterministic IND recognised-sponsor cross-reference
     -- (the company is legally authorised to sponsor a NL work visa)

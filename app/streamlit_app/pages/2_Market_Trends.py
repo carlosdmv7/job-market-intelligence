@@ -9,7 +9,10 @@ from streamlit_app.db import require_marts, run_df
 
 st.set_page_config(page_title="Market Trends", page_icon="📈", layout="wide")
 st.title("📈 Market Trends")
-st.caption("What the EU tech market looks like right now, and how it moves over time.")
+st.caption(
+    "What the tracked markets (🇳🇱 🇸🇪 🇩🇪 🇪🇸 + remote boards) look like right now, "
+    "and how they move over time."
+)
 
 require_marts(
     "marts.FT_JOB_POSTING",
@@ -59,12 +62,12 @@ with left:
     )
     ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
 with right:
-    st.markdown("##### Jobs by location")
+    st.markdown("##### Jobs by market")
     loc = run_df(
-        "select case when country_code is null then 'Remote / global' else country_code end "
-        "as location, count(*) as n from marts.FT_JOB_POSTING group by 1 order by n desc"
+        "select country_code, count(*) as n from marts.FT_JOB_POSTING group by 1 order by n desc"
     )
-    ui.show(ui.hbar(loc, "location", "n", value_title="postings"))
+    loc["market"] = loc["country_code"].map(ui.market_label)
+    ui.show(ui.hbar(loc, "market", "n", value_title="postings"))
 
 # --- temporal (needs accumulated daily snapshots) --------------------------
 st.divider()
@@ -114,24 +117,47 @@ else:
     )
     ui.show(line)
 
-    by_source = run_df(
-        "select date_key, source, count(*) as n "
-        "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key, source order by date_key"
-    )
-    st.markdown("##### Active postings by source over time")
-    multi = (
-        alt.Chart(by_source)
-        .mark_line(strokeWidth=2, point=True)
-        .encode(
-            x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
-            y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-            color=alt.Color("source:N", title=None),
-            tooltip=[
-                alt.Tooltip("date_key:T", title="day"),
-                "source:N",
-                alt.Tooltip("n:Q", title="active"),
-            ],
+    t1, t2 = st.columns(2, gap="large")
+    with t1:
+        by_market = run_df(
+            "select date_key, country_code, count(*) as n "
+            "from marts.FT_JOB_SNAPSHOT_DAILY group by 1, 2 order by date_key"
         )
-        .properties(height=260)
-    )
-    ui.show(multi)
+        by_market["market"] = by_market["country_code"].map(ui.market_label)
+        st.markdown("##### Active postings by market over time")
+        ui.show(
+            alt.Chart(by_market)
+            .mark_line(strokeWidth=2, point=True)
+            .encode(
+                x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+                y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
+                color=alt.Color("market:N", title=None),
+                tooltip=[
+                    alt.Tooltip("date_key:T", title="day"),
+                    "market:N",
+                    alt.Tooltip("n:Q", title="active"),
+                ],
+            )
+            .properties(height=260)
+        )
+    with t2:
+        by_source = run_df(
+            "select date_key, source, count(*) as n "
+            "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key, source order by date_key"
+        )
+        st.markdown("##### Active postings by source over time")
+        ui.show(
+            alt.Chart(by_source)
+            .mark_line(strokeWidth=2, point=True)
+            .encode(
+                x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+                y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
+                color=alt.Color("source:N", title=None),
+                tooltip=[
+                    alt.Tooltip("date_key:T", title="day"),
+                    "source:N",
+                    alt.Tooltip("n:Q", title="active"),
+                ],
+            )
+            .properties(height=260)
+        )

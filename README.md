@@ -41,7 +41,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
-                    Streamlit: Visa Sponsorship · Trends · Ask the Data (text-to-SQL)
+        Streamlit: Explorer (job cards) · Trends · NL Visa Audit · Ask the Data · How It Works
 ```
 
 dbt lineage (rendered from the real DAG — 9 models, 1 seed, 45 data tests):

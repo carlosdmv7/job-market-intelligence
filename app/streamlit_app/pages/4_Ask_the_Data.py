@@ -24,8 +24,8 @@ st.caption(f"Provider `{settings.llm_provider}` · model `{settings.llm_model}`"
 
 examples = [
     "Which recognised-sponsor companies in NL have the most open roles?",
-    "How many postings are there per country?",
-    "Top 10 technologies across all postings",
+    "Compare the number of postings per country",
+    "Top 10 technologies in Sweden vs the Netherlands",
     "Companies hiring Data Engineers where English is sufficient",
 ]
 

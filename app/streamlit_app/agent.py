@@ -25,9 +25,10 @@ marts.FT_JOB_POSTING  -- one row per deduplicated current posting
   posted_at (timestamp), salary_raw, is_remote_raw (bool), source_count (int),
   normalized_role, role_family, seniority, employment_type, remote_policy,
   technologies (VARCHAR[]), visa_status, visa_confidence (0..1), visa_evidence,
-  is_visa_sponsor (bool), requires_local_language (bool), working_languages (VARCHAR[]),
-  english_sufficient (bool), relocation_support (bool),
+  visa_reasoning, is_visa_sponsor (bool), requires_local_language (bool),
+  working_languages (VARCHAR[]), english_sufficient (bool), relocation_support (bool),
   enrichment_confidence (0..1), is_enriched (bool),
+  enrichment_model, enrichment_prompt_version, enriched_at (timestamp),
   is_recognised_sponsor (bool)  -- company is on the official IND register (NL visa sponsor)
   sponsor_kvk                   -- Dutch Chamber of Commerce number proving it
 

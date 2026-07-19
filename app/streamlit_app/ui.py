@@ -43,6 +43,28 @@ VISA_COLORS = {
     "likely_no": WARNING,
     "explicit_no": CRITICAL,
 }
+VISA_LABELS = {
+    "explicit_yes": "✅ Sponsorship offered (explicit)",
+    "likely_yes": "🟢 Sponsorship likely",
+    "unclear": "⚪ No signal in the text",
+    "likely_no": "🟠 Sponsorship unlikely",
+    "explicit_no": "🔴 No sponsorship (explicit)",
+}
+
+#: Markets with a dedicated local corpus (flag + name for display); anything
+#: else renders as its bare ISO code, NULL as Remote / global.
+MARKETS = {
+    "NL": "🇳🇱 Netherlands",
+    "SE": "🇸🇪 Sweden",
+    "DE": "🇩🇪 Germany",
+    "ES": "🇪🇸 Spain",
+}
+
+
+def market_label(country_code: str | None) -> str:
+    if country_code is None or country_code != country_code:  # None or NaN
+        return "🌍 Remote / global"
+    return MARKETS.get(country_code, country_code)
 
 
 @alt.theme.register("jmi", enable=True)
