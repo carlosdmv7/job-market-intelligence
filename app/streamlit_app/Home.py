@@ -131,5 +131,6 @@ st.info(
     "**📈 Market Trends** — how the markets move over time · "
     "**🛂 NL Visa Audit** — the IND recognised-sponsor cross-reference · "
     "**💬 Ask the Data** — questions in natural language · "
-    "**⚙️ How It Works** — pipeline, LLM prompt, and guardrails."
+    "**⚙️ How It Works** — pipeline, LLM prompt, and guardrails · "
+    "**🎯 CV Match** — rank every posting against your CV (session-only)."
 )

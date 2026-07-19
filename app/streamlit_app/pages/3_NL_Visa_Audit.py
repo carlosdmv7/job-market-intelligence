@@ -20,6 +20,18 @@ st.caption(
     "cross-referenced against the official IND register (≈12.8k recognised sponsors), "
     "each match verifiable by KvK number. Deterministic: no LLM involved."
 )
+with st.expander("What are IND and KvK? (plain-language)"):
+    st.markdown(
+        """
+- **IND** is the Dutch immigration service. It publishes the official list of employers
+  that are allowed to sponsor a work visa for non-EU hires.
+- **KvK** is the Dutch chamber-of-commerce registry number — the equivalent of a Spanish
+  CIF/NIF. Showing it proves the match is the *actual registered company*, not just a
+  name that looks similar. Click any KvK link below to see the company on the public registry.
+- **If you're an EU citizen you don't need any of this** — you have the right to work in
+  NL already. This page exists for non-EU users and as the app's auditable-data showcase.
+"""
+    )
 
 require_marts(
     "marts.FT_JOB_POSTING",

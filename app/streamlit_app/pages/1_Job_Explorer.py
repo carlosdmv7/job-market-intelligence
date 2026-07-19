@@ -40,10 +40,20 @@ techs = run_df(
     """
 )["tech"].tolist()
 
-f1, f2, f3 = st.columns([2, 2, 2], gap="medium")
+f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
 picked_markets = f1.multiselect("Market", market_options, default=[])
 search = f2.text_input("Title or company contains", placeholder="engineer, dbt, Spotify…")
 picked_techs = f3.multiselect("Technologies (LLM-extracted)", techs)
+sort = f4.selectbox("Sort by", ["Newest", "Language fit", "Visa signal"])
+
+ORDERINGS = {
+    "Newest": "last_seen_at desc",
+    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
+    "Visa signal": (
+        "is_recognised_sponsor desc, "
+        "(visa_status in ('explicit_yes', 'likely_yes')) desc, last_seen_at desc"
+    ),
+}
 
 g1, g2, g3, g4 = st.columns(4, gap="medium")
 sponsor_only = g1.toggle("IND sponsor only", help="Company on the Dutch IND register.")
@@ -91,44 +101,30 @@ df = run_df(
         remote_policy, employment_type
     from marts.FT_JOB_POSTING
     {where}
-    order by is_recognised_sponsor desc,
-             (visa_status in ('explicit_yes', 'likely_yes')) desc,
-             last_seen_at desc
+    order by {ORDERINGS[sort]}
     limit 1000
     """,
     tuple(params),
 )
 
-st.caption(f"**{len(df):,}** matching postings (showing up to 1,000; strongest signals first).")
+st.caption(f"**{len(df):,}** matching postings (showing up to 1,000).")
 
 view = df[
     [
         "title",
         "company_name",
-        "country_code",
         "seniority",
+        "english_sufficient",
         "is_recognised_sponsor",
         "visa_status",
         "salary_raw",
         "source",
     ]
 ].copy()
-view["market"] = df["country_code"].map(ui.market_label)
-view = view.drop(columns=["country_code"])
+view.insert(2, "market", df["country_code"].map(ui.market_label))
 
 event = st.dataframe(
-    view[
-        [
-            "title",
-            "company_name",
-            "market",
-            "seniority",
-            "is_recognised_sponsor",
-            "visa_status",
-            "salary_raw",
-            "source",
-        ]
-    ],
+    view,
     width="stretch",
     hide_index=True,
     on_select="rerun",
@@ -139,7 +135,12 @@ event = st.dataframe(
         "company_name": st.column_config.TextColumn("Company"),
         "market": st.column_config.TextColumn("Market"),
         "seniority": st.column_config.TextColumn("Seniority"),
-        "is_recognised_sponsor": st.column_config.CheckboxColumn("IND"),
+        "english_sufficient": st.column_config.CheckboxColumn(
+            "EN ok", help="English alone is enough, per the LLM read. Empty = not enriched yet."
+        ),
+        "is_recognised_sponsor": st.column_config.CheckboxColumn(
+            "Visa", help="Company can legally sponsor a NL work visa (IND list)."
+        ),
         "visa_status": st.column_config.TextColumn("LLM visa read"),
         "salary_raw": st.column_config.TextColumn("Salary (raw)"),
         "source": st.column_config.TextColumn("Source"),
@@ -195,27 +196,43 @@ with links:
 
 sig1, sig2 = st.columns(2, gap="large")
 with sig1:
-    st.markdown("##### 🏛️ Deterministic signal — IND register")
+    st.markdown("##### 🗣️ Can you work there in English?")
+    if not row["is_enriched"]:
+        st.markdown("_Not yet enriched._ Coverage accumulates daily within the free LLM quota.")
+    else:
+        if pd.isna(row["english_sufficient"]):
+            st.markdown("The text doesn't say which language the job needs.")
+        elif row["english_sufficient"]:
+            st.success("**English is enough** for this job, per the posting text.")
+        else:
+            st.warning("**The local language is required** to do this job (not just a plus).")
+        langs = _items(row["working_languages"])
+        if langs:
+            st.markdown("Working languages: " + ", ".join(f"`{lang}`" for lang in langs))
+        if pd.notna(row["relocation_support"]) and row["relocation_support"]:
+            st.markdown("📦 The posting mentions relocation support.")
+
+    st.markdown("##### 🏛️ Visa sponsorship (for non-EU candidates)")
     if row["is_recognised_sponsor"]:
         kvk = _txt(row["sponsor_kvk"])
         st.success(
-            "**Recognised sponsor** — this company is on the official IND register of "
-            "employers legally authorised to sponsor a NL highly-skilled-migrant visa."
+            "**Recognised sponsor** — this company is on the Dutch government's (IND) "
+            "official list of employers allowed to sponsor a work visa."
         )
         if kvk:
             st.markdown(
-                f"KvK **{kvk}** — [verify on the public register]"
-                f"(https://www.kvk.nl/zoeken/?source=all&q={kvk})"
+                f"Company registry nº (KvK, the Dutch CIF) **{kvk}** — "
+                f"[check it on the public registry](https://www.kvk.nl/zoeken/?source=all&q={kvk})"
             )
     else:
-        st.markdown(
-            "Not on the IND register. (Only meaningful for NL relocation — the register "
-            "is Dutch; Swedish employers carry a Bolagsverket organisationsnummer instead.)"
+        st.caption(
+            "Not on the Dutch sponsor list. EU citizens don't need this — it only matters "
+            "if you'd need a work visa."
         )
 with sig2:
-    st.markdown("##### 🧠 LLM signal — read of the posting text")
+    st.markdown("##### 🧠 What the LLM read in the text")
     if not row["is_enriched"]:
-        st.markdown("_Not yet enriched._ Coverage accumulates daily within the free LLM quota.")
+        st.markdown("_Not yet enriched._")
     else:
         st.markdown(f"**{ui.VISA_LABELS.get(row['visa_status'], row['visa_status'])}**")
         if pd.notna(row["visa_confidence"]):
@@ -227,18 +244,6 @@ with sig2:
             st.markdown(f"**Why:** {_txt(row['visa_reasoning'])}")
         if _txt(row["visa_evidence"]):
             st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
-        details = []
-        if pd.notna(row["english_sufficient"]):
-            details.append(
-                "🇬🇧 English sufficient" if row["english_sufficient"] else "🗣️ local language needed"
-            )
-        if pd.notna(row["relocation_support"]) and row["relocation_support"]:
-            details.append("📦 relocation support mentioned")
-        langs = _items(row["working_languages"])
-        if langs:
-            details.append("languages: " + ", ".join(langs))
-        if details:
-            st.markdown(" · ".join(details))
         provenance = (
             f"model `{row['enrichment_model']}` · prompt `{row['enrichment_prompt_version']}` · "
             f"enriched {row['enriched_at'].date() if pd.notna(row['enriched_at']) else '—'}"

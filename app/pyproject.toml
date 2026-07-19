@@ -8,6 +8,7 @@ dependencies = [
     "jmi-enrichment",
     "streamlit>=1.38",
     "pandas>=2.2",
+    "pypdf>=5",  # CV Match: extract text from an uploaded PDF, in-session only
 ]
 
 [build-system]
