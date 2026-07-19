@@ -7,6 +7,7 @@ from jmi_core.settings import Settings
 from jmi_scrapers.free_apis import (
     AdzunaScraper,
     ArbeitnowScraper,
+    JobTechScraper,
     RemoteOkScraper,
     RemotiveScraper,
 )
@@ -79,6 +80,78 @@ def test_parsers_skip_incomplete():
     assert RemotiveScraper(_s())._parse({"id": 1}) is None
     assert ArbeitnowScraper(_s())._parse({"title": "x"}) is None
     assert RemoteOkScraper(_s())._parse({"legal": "notice"}) is None
+    assert JobTechScraper(_s())._parse({"headline": "x"}) is None
+
+
+def test_jobtech_parse():
+    rec = {
+        "id": "31276354",
+        "headline": "Data Engineer till KTH",
+        "webpage_url": "https://arbetsformedlingen.se/platsbanken/annonser/31276354",
+        "publication_date": "2026-07-16T10:28:10",
+        "application_deadline": "2026-08-15T23:59:59",
+        "employer": {
+            "name": "KUNGLIGA TEKNISKA HÖGSKOLAN",
+            "url": "https://www.kth.se",
+            "organization_number": "2021003054",
+        },
+        "workplace_address": {
+            "municipality": "Stockholm",
+            "region": "Stockholms län",
+            "country_code": "199",
+        },
+        "description": {"text": "We build data pipelines with dbt and Airflow."},
+        "application_details": {"url": "https://kth.varbi.com/what/apply"},
+        "employment_type": {"label": "Vanlig anställning"},
+        "salary_description": "Månadslön enligt avtal",
+    }
+    p = JobTechScraper(_s())._parse(rec)
+    assert p is not None
+    assert p.source is JobSource.JOBTECH
+    assert p.source_job_id == "31276354"
+    assert p.country_code == "SE"
+    assert p.location_raw == "Stockholm, Stockholms län"
+    assert str(p.apply_url) == "https://kth.varbi.com/what/apply"
+    assert p.company_name == "KUNGLIGA TEKNISKA HÖGSKOLAN"
+    assert p.posted_at is not None and p.posted_at.year == 2026
+    assert p.valid_through is not None and p.valid_through.month == 8
+    assert p.employment_type_raw == "Vanlig anställning"
+
+
+class _FakeJobTechHttp:
+    """Fake HttpSession honouring the API's ``limit`` param (as the real one does)."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def get_json(self, url, *, params=None, headers=None):
+        what = params["q"]
+        self.calls.append(what)
+        return {
+            "hits": [
+                {
+                    "id": f"{what}-{i}",
+                    "headline": what,
+                    "webpage_url": f"https://arbetsformedlingen.se/platsbanken/annonser/{what}-{i}",
+                    "employer": {"name": "Acme AB"},
+                    "workplace_address": {"municipality": "Stockholm"},
+                }
+                for i in range(int(params["limit"]))
+            ]
+        }
+
+
+def test_jobtech_scrape_sweeps_queries_dedups_and_respects_limit():
+    scraper = JobTechScraper(_s(), whats=["data engineer", "data analyst"])
+    scraper._http = _FakeJobTechHttp()
+
+    postings = list(scraper.scrape(10))
+
+    assert len(postings) == 10  # respects the overall limit
+    assert len({p.source_job_id for p in postings}) == 10  # no duplicates
+    assert all(p.country_code == "SE" for p in postings)
+    # spread across both queries rather than draining the first one
+    assert {p.title for p in postings} == {"data engineer", "data analyst"}
 
 
 def test_adzuna_parse_sets_country():

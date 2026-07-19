@@ -36,7 +36,7 @@ useful for relocation, and it works even for postings the LLM never saw.
 ## Architecture
 
 ```
-free job APIs + Adzuna NL ──httpx──► ingest flow ─► raw.raw_job_postings   (append-only)
+free APIs + Adzuna NL/DE/ES + JobTech SE ──httpx──► ingest ─► raw.raw_job_postings (append-only)
 IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichment  (LLM output)
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
@@ -100,7 +100,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | Contracts (Pydantic v2, `content_hash`, `SCHEMA_VERSION`) | Production-grade: versioned, hash-stable, 100% typed |
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
 | dbt medallion (dedup grain, quality tests) | Production-grade: 45 data tests incl. grain + invariant tests |
-| Ingestion breadth | Demo: 4 free boards + Adzuna NL — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
+| Ingestion breadth | Demo: 4 free boards + Adzuna (NL/DE/ES) + JobTech (SE) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: Gemini free tier caps daily throughput; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
@@ -125,8 +125,9 @@ cp .env.example .env          # set motherduck_token (the only required secret)
 uv sync --all-packages
 
 make warehouse-init           # raw/staging/marts schemas in MotherDuck
-make ingest-all               # free boards -> raw
+make ingest-all               # free boards (incl. JobTech SE) -> raw
 make ingest-nl                # Adzuna NL (needs free ADZUNA_APP_ID/KEY)
+make ingest SOURCE=adzuna COUNTRY=de   # any Adzuna country (nl/es/de/fr/it/...)
 make sponsors-refresh         # IND register -> dbt seed (monthly)
 make enrich                   # LLM classification -> raw
 make dbt-build                # staging -> marts (+ 45 data tests)

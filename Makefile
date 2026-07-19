@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl enrich sponsors-refresh dbt-deps dbt-build app clean
+.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -44,14 +44,17 @@ ollama-status: ## Show service state, model loaded in RAM, and free memory
 warehouse-init: ## Create raw/staging/marts schemas + raw tables in MotherDuck
 	uv run python -m jmi_flows.warehouse_init
 
-ingest: ## Run the ingestion flow for one source (SOURCE=remotive)
-	uv run python -m jmi_flows.ingest --source $(or $(SOURCE),remotive)
+ingest: ## Run the ingestion flow for one source (SOURCE=remotive [COUNTRY=de])
+	uv run python -m jmi_flows.ingest --source $(or $(SOURCE),remotive) $(if $(COUNTRY),--country $(COUNTRY))
 
 ingest-all: ## Ingest every free no-key source
-	@for s in remotive arbeitnow remoteok; do uv run python -m jmi_flows.ingest --source $$s; done
+	@for s in remotive arbeitnow remoteok jobtech; do uv run python -m jmi_flows.ingest --source $$s; done
 
 ingest-nl: ## Ingest local NL jobs via Adzuna (needs ADZUNA_APP_ID/KEY) — the relocation corpus
 	uv run python -m jmi_flows.ingest --source adzuna
+
+ingest-se: ## Ingest Sweden via JobTech/Platsbanken (free, no key)
+	uv run python -m jmi_flows.ingest --source jobtech
 
 enrich: ## Run the LLM enrichment flow
 	uv run python -m jmi_flows.enrich

@@ -48,9 +48,16 @@ jobs:
 
       # One flaky job board must not cost the day's snapshot, so each source
       # ingests independently; a failure stays visible as a red step.
-      - name: Ingest — Adzuna NL (the relocation corpus)
+      - name: Ingest — Adzuna NL/DE/ES (local per-country corpora)
         continue-on-error: true
-        run: uv run python -m jmi_flows.ingest --source adzuna
+        run: |
+          for c in nl de es; do
+            uv run python -m jmi_flows.ingest --source adzuna --country "$c" || true
+          done
+
+      - name: Ingest — JobTech SE (Platsbanken, keyless)
+        continue-on-error: true
+        run: uv run python -m jmi_flows.ingest --source jobtech
 
       - name: Ingest — free remote boards
         continue-on-error: true

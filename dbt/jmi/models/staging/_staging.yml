@@ -10,7 +10,7 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: [remotive, arbeitnow, remoteok, adzuna, linkedin, indeed, honeypot, techmeabroad, infojobs, stepstone, irishjobs, itjobs]
+              values: [remotive, arbeitnow, remoteok, adzuna, jobtech, linkedin, indeed, honeypot, techmeabroad, infojobs, stepstone, irishjobs, itjobs]
       - name: scraped_date
         data_tests: [not_null]
 

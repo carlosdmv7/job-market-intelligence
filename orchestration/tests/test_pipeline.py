@@ -92,3 +92,22 @@ def test_enrich_noop_when_nothing_pending(wh):
 
 def test_ingest_respects_limit(wh):
     assert ingest_source("honeypot", warehouse=wh, scraper=FakeScraper(100), limit=5) == 5
+
+
+def test_ingest_forwards_country_to_registry(wh, monkeypatch):
+    captured: dict = {}
+
+    def fake_get_scraper(name, settings, **kwargs):
+        captured.update(kwargs, name=name)
+        return FakeScraper(1)
+
+    monkeypatch.setattr("jmi_scrapers.registry.get_scraper", fake_get_scraper)
+    ingest_source("adzuna", settings=Settings(), warehouse=wh, limit=1, country="de")
+    assert captured["name"] == "adzuna"
+    assert captured["country"] == "de"
+
+    # No country given -> the kwarg is not forwarded at all (single-market
+    # scrapers do not accept it).
+    captured.clear()
+    ingest_source("remotive", settings=Settings(), warehouse=wh, limit=1)
+    assert "country" not in captured

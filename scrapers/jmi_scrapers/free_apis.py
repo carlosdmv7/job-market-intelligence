@@ -32,6 +32,18 @@ def _unix_to_dt(value: Any) -> datetime | None:
         return None
 
 
+#: Data-role queries swept by the per-country scrapers (one search per term),
+#: so a single ingest yields a broad, comparable local corpus per market.
+DATA_ROLE_QUERIES: tuple[str, ...] = (
+    "data engineer",
+    "analytics engineer",
+    "data analyst",
+    "data scientist",
+    "machine learning engineer",
+    "data platform",
+)
+
+
 class RemotiveScraper(BaseScraper):
     """https://remotive.com/api/remote-jobs — remote tech jobs, no key."""
 
@@ -157,6 +169,78 @@ class RemoteOkScraper(BaseScraper):
         return f"USD {lo or hi}" if (lo or hi) else None
 
 
+class JobTechScraper(BaseScraper):
+    """https://jobsearch.api.jobtechdev.se — Sweden's public employment service.
+
+    Free, no key, no registration (Arbetsförmedlingen / Platsbanken open API).
+    Country is always SE. Postings carry the employer's organisationsnummer,
+    which is publicly verifiable at Bolagsverket — the Swedish analogue of the
+    KvK audit trail on the IND cross-reference.
+    """
+
+    source = JobSource.JOBTECH
+    API_URL = "https://jobsearch.api.jobtechdev.se/search"
+    PER_PAGE = 100  # the API's maximum
+    DEFAULT_WHATS: ClassVar[tuple[str, ...]] = DATA_ROLE_QUERIES
+
+    def __init__(self, settings: Settings, *, whats: Sequence[str] | None = None, **kwargs: Any):
+        super().__init__(settings, **kwargs)
+        self.whats = list(whats) if whats else list(self.DEFAULT_WHATS)
+
+    def scrape(self, limit: int) -> Iterator[JobPosting]:
+        per_query = max(1, -(-limit // len(self.whats)))  # ceil, spread across roles
+        seen: set[str] = set()
+        total = 0
+        for what in self.whats:
+            if total >= limit:
+                break
+            data = self.http.get_json(
+                self.API_URL,
+                params={"q": what, "limit": min(per_query, self.PER_PAGE)},
+            )
+            for record in data.get("hits", []):
+                if total >= limit:
+                    break
+                posting = self._parse(record)
+                if posting is None or posting.source_job_id in seen:
+                    continue
+                seen.add(posting.source_job_id)
+                total += 1
+                yield posting
+        log.info("jobtech.scrape.done", queries=len(self.whats), count=total)
+
+    def _parse(self, record: dict[str, Any]) -> JobPosting | None:
+        job_id = record.get("id")
+        title = record.get("headline")
+        url = record.get("webpage_url")
+        if not job_id or not title or not url:
+            return None
+        employer = record.get("employer") or {}
+        workplace = record.get("workplace_address") or {}
+        description = record.get("description") or {}
+        application = record.get("application_details") or {}
+        employment_type = record.get("employment_type") or {}
+        location = ", ".join(
+            part for part in (workplace.get("municipality"), workplace.get("region")) if part
+        )
+        return self.build_posting(
+            source_job_id=str(job_id),
+            source_url=url,
+            apply_url=application.get("url"),
+            title=title,
+            company_name=employer.get("name"),
+            company_url=employer.get("url"),
+            description_raw=description.get("text"),
+            location_raw=location or None,
+            country_code="SE",
+            posted_at=parse_iso_dt(record.get("publication_date")),
+            valid_through=parse_iso_dt(record.get("application_deadline")),
+            salary_raw=record.get("salary_description"),
+            employment_type_raw=employment_type.get("label"),
+            raw_payload=record,
+        )
+
+
 class AdzunaScraper(BaseScraper):
     """https://api.adzuna.com — per-country search (free key). Improvement hook.
 
@@ -166,16 +250,7 @@ class AdzunaScraper(BaseScraper):
     source = JobSource.ADZUNA
     BASE_URL = "https://api.adzuna.com/v1/api/jobs"
     PER_PAGE = 50
-    #: Data-role queries swept by default (one Adzuna search per term), so a
-    #: single ingest yields a broad local corpus rather than one narrow role.
-    DEFAULT_WHATS: ClassVar[tuple[str, ...]] = (
-        "data engineer",
-        "analytics engineer",
-        "data analyst",
-        "data scientist",
-        "machine learning engineer",
-        "data platform",
-    )
+    DEFAULT_WHATS: ClassVar[tuple[str, ...]] = DATA_ROLE_QUERIES
 
     def __init__(
         self,

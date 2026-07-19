@@ -28,11 +28,14 @@ def ingest_source(
     scraper: BaseScraper | None = None,
     limit: int | None = None,
     run_id: str | None = None,
+    country: str | None = None,
 ) -> int:
     """Scrape one source and append observations to raw.raw_job_postings.
 
     Dependencies are injectable so the flow can be tested with a fake scraper
-    and a local DuckDB warehouse.
+    and a local DuckDB warehouse. ``country`` is forwarded to per-country
+    scrapers (Adzuna); passing it to a single-market source fails loudly
+    rather than silently ingesting the wrong corpus.
     """
     settings = settings or get_settings()
     limit = limit or settings.scrape_max_postings
@@ -41,7 +44,10 @@ def ingest_source(
     if scraper is None:
         from jmi_scrapers.registry import get_scraper
 
-        scraper = get_scraper(source, settings, run_id=run_id)
+        kwargs: dict[str, Any] = {"run_id": run_id}
+        if country:
+            kwargs["country"] = country
+        scraper = get_scraper(source, settings, **kwargs)
 
     owns_wh = warehouse is None
     wh = warehouse or Warehouse(
@@ -51,7 +57,12 @@ def ingest_source(
         postings = list(scraper.scrape(limit))
         inserted = wh.insert_postings(postings)
         log.info(
-            "ingest.done", source=source, scraped=len(postings), inserted=inserted, run_id=run_id
+            "ingest.done",
+            source=source,
+            country=country,
+            scraped=len(postings),
+            inserted=inserted,
+            run_id=run_id,
         )
         return inserted
     finally:

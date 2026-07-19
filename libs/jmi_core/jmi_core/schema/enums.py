@@ -18,8 +18,11 @@ class JobSource(StrEnum):
     ARBEITNOW = "arbeitnow"
     REMOTEOK = "remoteok"
 
-    # Free with a key (improvement hook — covers NL/ES/DE/IE/PT).
+    # Free with a key — per-country search (NL/ES/DE/FR/IT/...; no IE/SE/PT).
     ADZUNA = "adzuna"
+
+    # Sweden's public employment service (Platsbanken) — free, no key.
+    JOBTECH = "jobtech"
 
     # Scrapfly-era / API sources (improvement hooks, not in the default path).
     LINKEDIN = "linkedin"

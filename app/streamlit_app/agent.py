@@ -46,6 +46,8 @@ Tips:
   posting text (is_visa_sponsor, visa_status='explicit_yes') is a secondary signal.
 - array membership: list_contains(technologies, 'dbt').
 - trends over time: group marts.FT_JOB_SNAPSHOT_DAILY by date_key.
+- country_code is ISO alpha-2 (NL, SE, DE, ES, ...); local per-country corpora come
+  from adzuna (NL/DE/ES) and jobtech (SE); remote-first boards often have NULL country.
 """
 
 SYSTEM_PROMPT = (

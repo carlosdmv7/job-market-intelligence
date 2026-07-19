@@ -11,6 +11,6 @@ from __future__ import annotations
 # Semantic version of the canonical contract. Bump on any field rename/removal,
 # enum member change, or content_hash recipe change. Written into every row.
 # 0.2.0: added free public-API sources (remotive/arbeitnow/remoteok/adzuna).
-SCHEMA_VERSION = "0.2.0"
+SCHEMA_VERSION = "0.3.0"  # 0.3.0: JobSource.JOBTECH (Sweden/Platsbanken)
 
 __all__ = ["SCHEMA_VERSION"]

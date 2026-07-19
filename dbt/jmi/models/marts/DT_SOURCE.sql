@@ -8,6 +8,7 @@ select
     {{ dbt_utils.generate_surrogate_key(['source']) }} as source_key,
     source,
     case source
+        when 'jobtech'      then 'SE'  -- Platsbanken, Sweden's public employment service
         when 'honeypot'     then 'NL'
         when 'infojobs'     then 'ES'
         when 'stepstone'    then 'DE'
