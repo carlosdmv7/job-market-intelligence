@@ -8,7 +8,7 @@ ingests EU tech jobs daily, enriches them with an LLM, models them dimensionally
 with dbt, and serves the result through a Streamlit app — including a
 guard-railed natural-language **"Ask the Data"** agent.
 
-**Live app:** [job-market-intelligence.streamlit.app](https://job-market-intelligence-memdm9pkol5hxqyawtd6sc.streamlit.app/) · **Runs at 0€** end to end (MotherDuck free tier,
+**Live app:** [job-market-intelligence-carlosdmv7.streamlit.app](https://job-market-intelligence-carlosdmv7.streamlit.app/) · **Runs at 0€** end to end (MotherDuck free tier,
 Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
 [ADR 0005](docs/adr/0005-zero-cost-stack.md)).
 
