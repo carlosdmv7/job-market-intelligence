@@ -1,0 +1,7 @@
+{
+  "_comment": "Committed quality floor for the visa classifier. CI fails below these. Keys are either a report-level attribute (accuracy, macro_f1, ...) or '<class>.<metric>'. Per-class entries are skipped when that class has no support in the labelled set, so the file can be tightened as the golden set grows. Raise these only with a commit that shows the measured improvement; lowering one is a deliberate, reviewable act.",
+  "accuracy": 0.7,
+  "macro_f1": 0.45,
+  "explicit_no.recall": 0.5,
+  "explicit_yes.precision": 0.6
+}

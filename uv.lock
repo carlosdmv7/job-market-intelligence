@@ -24,6 +24,7 @@ members = [
     "jmi-app",
     "jmi-core",
     "jmi-enrichment",
+    "jmi-evals",
     "jmi-flows",
     "jmi-scrapers",
     "job-market-intelligence",
@@ -1504,6 +1505,23 @@ requires-dist = [
     { name = "jmi-core", editable = "libs/jmi_core" },
 ]
 provides-extras = ["anthropic"]
+
+[[package]]
+name = "jmi-evals"
+version = "0.1.0"
+source = { editable = "evals" }
+dependencies = [
+    { name = "jmi-core" },
+    { name = "jmi-enrichment" },
+    { name = "pandas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jmi-core", editable = "libs/jmi_core" },
+    { name = "jmi-enrichment", editable = "enrichment" },
+    { name = "pandas", specifier = ">=2.2" },
+]
 
 [[package]]
 name = "jmi-flows"

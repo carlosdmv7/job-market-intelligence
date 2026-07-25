@@ -16,6 +16,10 @@ concurrency:
   group: daily-pipeline
   cancel-in-progress: false # never kill a half-finished warehouse write
 
+# The run needs to push docs/status/pipeline.json back to main.
+permissions:
+  contents: write
+
 jobs:
   pipeline:
     name: ingest -> enrich -> dbt build
@@ -81,3 +85,26 @@ jobs:
         run: |
           uv run dbt deps
           uv run dbt build
+
+      # target/ is gitignored, so the deployed app can never read run_results.json
+      # directly. Distil it to a small committed file instead — that is where the
+      # app's freshness header gets "dbt tests passing", and the git history of
+      # this one file doubles as a record of when the warehouse last built clean.
+      - name: Record the run status
+        if: always()
+        run: uv run python -m jmi_flows.dbt_status
+
+      - name: Commit the run status
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/status/pipeline.json
+          # Nothing to do when the numbers are unchanged — a daily empty commit
+          # would bury the history this file exists to provide.
+          if git diff --cached --quiet; then
+            echo "status unchanged"
+          else
+            git commit -m "Daily pipeline: record dbt run status [skip ci]"
+            git push
+          fi

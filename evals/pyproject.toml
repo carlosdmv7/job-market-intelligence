@@ -1,0 +1,17 @@
+[project]
+name = "jmi-evals"
+version = "0.1.0"
+description = "Golden-set evaluation harness for the LLM visa classifier"
+requires-python = ">=3.11"
+dependencies = [
+    "jmi-core",
+    "jmi-enrichment",
+    "pandas>=2.2",   # sampling reads the warehouse through DuckDB's df()
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["jmi_evals"]

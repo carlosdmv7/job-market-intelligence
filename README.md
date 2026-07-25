@@ -26,7 +26,15 @@ stop there. This project treats the LLM as the *weakest* of two signals:
    company's KvK (Chamber of Commerce) number, so every flag can be verified
    against a public register. No hallucinations possible.
 2. **LLM (secondary):** the posting *text* is classified into a visa enum with
-   confidence + verbatim evidence ([ADR 0003](docs/adr/0003-visa-enum-classification.md)).
+   confidence + verbatim evidence ([ADR 0003](docs/adr/0003-visa-enum-classification.md)),
+   and that classifier is **measured against a hand-labelled golden set**
+   ([ADR 0006](docs/adr/0006-llm-evaluation.md)) rather than trusted.
+
+A posting the LLM has not read yet reads as **"not yet classified"** everywhere
+in the app — never as "no sponsorship". Enrichment is quota-bound and
+accumulates daily, so missing evidence is the normal state for most rows;
+conflating it with negative evidence would break the one thing this tool is
+for.
 
 Why it matters, measured on this corpus: on remote-first job boards only
 **~1%** of companies are recognised sponsors; on the NL-local corpus (Adzuna)
@@ -78,7 +86,9 @@ flowchart LR
     SP --> SN
 ```
 
-Grain table and full diagram: [docs/architecture.md](docs/architecture.md).
+Grain table and full diagram: [docs/architecture.md](docs/architecture.md) ·
+**[dbt docs — lineage & tests](https://carlosdmv7.github.io/job-market-intelligence/)**
+(published from the real DAG on every merge to `main`).
 
 ## What runs every day
 
@@ -104,6 +114,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | LLM enrichment | Working, quota-bound: Gemini free tier caps daily throughput; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
+| LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds); the golden set is sampled but **labelling is in progress**, so no accuracy number is claimed yet |
 
 ## Repo layout (uv workspace monorepo)
 
@@ -115,6 +126,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app + controlled text-to-SQL agent |
+| [evals](evals) | Golden-set eval harness for the visa classifier (sampler, replay, metrics) |
 | [infra](infra) | Docker Compose (Ollama + app), Dockerfiles |
 | [docs](docs) | Architecture + ADRs |
 
@@ -131,6 +143,7 @@ make ingest SOURCE=adzuna COUNTRY=de   # any Adzuna country (nl/es/de/fr/it/...)
 make sponsors-refresh         # IND register -> dbt seed (monthly)
 make enrich                   # LLM classification -> raw
 make dbt-build                # staging -> marts (+ 45 data tests)
+make evals                    # score the visa classifier (offline, replayed)
 make app                      # Streamlit at http://localhost:8501
 ```
 
@@ -155,6 +168,30 @@ needed.
 3. [Visa as enum + confidence + evidence](docs/adr/0003-visa-enum-classification.md)
 4. [MotherDuck + dbt medallion](docs/adr/0004-warehouse-motherduck-medallion.md)
 5. [Zero-cost stack](docs/adr/0005-zero-cost-stack.md)
+6. [The golden set is the classifier's contract](docs/adr/0006-llm-evaluation.md)
+
+## Measuring the LLM, not just using it
+
+The visa classifier is scored against a hand-labelled golden set of ~200
+stratified postings ([`evals/`](evals)). CI replays **recorded** production
+responses — no key, no quota, no network — so a red eval means the prompt or
+the code changed, never that the model had a bad morning.
+
+```bash
+make evals-sample     # stratified, deterministic, additive
+# label `visa_status_true` by hand
+make evals-record     # harvest responses the pipeline already stored
+make evals            # precision / recall / per-class F1 / confusion matrix
+```
+
+The ground truth answers *"does this posting's text state or imply
+sponsorship?"* — never *"can this employer sponsor?"*, which the IND register
+already answers deterministically. Agreement between the two signals is
+reported as a **diagnostic, not a score**: a recognised sponsor whose ad never
+mentions visas is the ordinary case, and the number worth watching is the
+reverse — the LLM claiming sponsorship at an employer that legally cannot
+sponsor. Why the golden set is the contract:
+[ADR 0006](docs/adr/0006-llm-evaluation.md).
 
 ## Tech stack
 

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build app clean
+.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status evals evals-sample evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -67,6 +67,24 @@ dbt-deps: ## Install dbt package dependencies (dbt_utils)
 
 dbt-build: dbt-deps ## Run dbt staging -> marts
 	set -a; [ -f .env ] && . ./.env; set +a; cd dbt/jmi && uv run dbt build
+
+dbt-docs: dbt-deps ## Generate + serve the dbt docs site locally
+	set -a; [ -f .env ] && . ./.env; set +a; cd dbt/jmi && uv run dbt docs generate && uv run dbt docs serve
+
+dbt-status: ## Distil the last dbt run into docs/status/pipeline.json (app freshness header)
+	uv run python -m jmi_flows.dbt_status
+
+evals-sample: ## Sample postings into the golden-set labelling template (SIZE=200)
+	uv run python -m jmi_evals.sample --size $(or $(SIZE),200)
+
+evals-record: ## Harvest the model responses the pipeline already stored, for offline replay
+	uv run python -m jmi_evals.replay --record
+
+evals: ## Score the visa classifier against the golden set (offline, replayed)
+	uv run python -m jmi_evals.runner --provider replay --check
+
+evals-live: ## Re-score by calling the real LLM (use after a prompt change, then re-record)
+	uv run python -m jmi_evals.runner --provider live
 
 app: ## Launch the Streamlit app
 	uv run streamlit run app/streamlit_app/Home.py

@@ -1,0 +1,42 @@
+name: Keep the app awake
+
+# Streamlit Community Cloud sleeps an app after a few days without traffic, and
+# a sleeping app greets a recruiter with a "wake this app up?" button instead of
+# the project. A cheap GET every 6 hours keeps it warm.
+#
+# This only pings the public URL — it holds no secrets and touches no data.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # off the hour: shared GitHub cron slots are congested
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping the Streamlit app
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET the app
+        run: |
+          url="https://job-market-intelligence-carlosdmv7.streamlit.app/"
+          # A cold app can take a while to boot, so allow a generous timeout and
+          # one retry before calling it down.
+          code=$(curl -sSL --max-time 90 --retry 2 --retry-delay 15 \
+                      -o /dev/null -w '%{http_code}' "$url")
+          echo "$url -> HTTP $code"
+          # Report a genuinely broken deploy, but never fail the job over a
+          # transient 5xx from the hosting platform — a red cron every few days
+          # trains you to ignore the notification.
+          if [ "$code" = "200" ]; then
+            echo "app is awake"
+          else
+            echo "::warning::app returned HTTP $code (not failing the job)"
+          fi

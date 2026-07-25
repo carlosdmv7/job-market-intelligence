@@ -38,6 +38,41 @@ jobs:
       - name: pytest
         run: uv run pytest --cov=jmi_core --cov=jmi_scrapers --cov=jmi_enrichment --cov-report=term-missing
 
+  evals:
+    name: LLM evals (replayed, offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # No API key, no quota, no network: the classifier is scored against
+      # recorded production responses, so a red job means the prompt or the
+      # code changed — never that the model had a bad morning.
+      #
+      # While the golden set is still being labelled this prints "nothing to
+      # score" and passes. Once it is labelled, add --require-labels so an
+      # accidentally emptied golden set fails the build instead of skipping it.
+      - name: Score the visa classifier against the golden set
+        run: uv run python -m jmi_evals.runner --provider replay --check
+
+      - name: Upload the eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/report.json
+          if-no-files-found: ignore
+
   dbt:
     name: dbt parse (DuckDB)
     runs-on: ubuntu-latest
