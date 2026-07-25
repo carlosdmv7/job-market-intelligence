@@ -5,21 +5,30 @@ official IND register of employers legally authorised to sponsor a
 highly-skilled-migrant visa. A match is auditable — it carries a KvK number you
 can verify on the public Chamber of Commerce register. The LLM never touches
 this signal.
+
+Every flag on this page opens to its evidence: the matched company name, its
+KvK number (linked to the public registry), and — clearly marked as the
+*secondary* signal — what the LLM read in the posting text, with its confidence
+and the verbatim snippet it quoted.
 """
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
 
-st.set_page_config(page_title="NL Visa Audit", page_icon="🛂", layout="wide")
-st.title("🛂 NL Visa Audit")
-st.caption(
-    "Jobs at companies that can **legally sponsor** a relocation to the Netherlands — "
-    "cross-referenced against the official IND register (≈12.8k recognised sponsors), "
-    "each match verifiable by KvK number. Deterministic: no LLM involved."
+ui.configure_page("NL Visa Audit")
+ui.page_header(
+    title="🛂 NL Visa Audit",
+    subtitle=(
+        "Jobs at companies that can **legally sponsor** a relocation to the Netherlands — "
+        "cross-referenced against the official IND register, each match verifiable by KvK "
+        "number. Deterministic: no LLM involved."
+    ),
 )
+
 with st.expander("What are IND and KvK? (plain-language)"):
     st.markdown(
         """
@@ -94,21 +103,30 @@ df = run_df(
         is_recognised_sponsor, sponsor_kvk,
         visa_status, round(visa_confidence, 2) as llm_confidence,
         english_sufficient, requires_local_language, relocation_support,
-        salary_raw, source, source_url, visa_evidence, is_enriched
+        salary_raw, source, source_url, visa_evidence, visa_reasoning,
+        is_enriched, posted_at, last_seen_at,
+        {ui.SPONSORSHIP_SQL} as sponsorship
     from marts.FT_JOB_POSTING
     where {" and ".join(clauses)}
-    order by is_recognised_sponsor desc,
-             (visa_status = 'explicit_yes') desc,
-             company_name
+    order by {ui.POSTINGS_ORDER}
     """,
     tuple(params),
 )
 
 sponsor_rows = df[df["is_recognised_sponsor"]]
-m1, m2, m3 = st.columns(3)
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("Matching postings", f"{len(df):,}")
 m2.metric("At recognised sponsors", f"{len(sponsor_rows):,}")
 m3.metric("Distinct sponsor companies", f"{sponsor_rows['company_name'].nunique():,}")
+m4.metric(
+    "Not yet classified by the LLM",
+    f"{int((~df['is_enriched'].fillna(False)).sum()):,}",
+    help=(
+        "These postings are awaiting enrichment within the free daily quota. "
+        "Missing is **not** the same as negative — the register match above is "
+        "unaffected either way."
+    ),
+)
 
 if not sponsor_rows.empty:
     st.markdown("##### Recognised sponsors with the most open roles")
@@ -121,34 +139,100 @@ if not sponsor_rows.empty:
     )
     ui.show(ui.hbar(top, "company_name", "openings", color=ui.GOOD, value_title="open roles"))
 
+# --- the grid: select a row to open its evidence ---------------------------
 st.markdown("##### Postings")
-ui.table(
-    df.drop(columns=["visa_evidence", "is_enriched"]),
-    column_config={
-        "source_url": st.column_config.LinkColumn("link", display_text="open"),
-        "is_recognised_sponsor": st.column_config.CheckboxColumn("IND sponsor"),
-        "sponsor_kvk": st.column_config.TextColumn("KvK"),
-        "visa_status": st.column_config.TextColumn("LLM visa read"),
-        "llm_confidence": st.column_config.NumberColumn("LLM conf.", format="%.2f"),
-    },
+st.caption(
+    "Select a row to see exactly why it is flagged. Sorted: recognised sponsors first, then most recent."
 )
 
-# --- audit trail -----------------------------------------------------------
-with st.expander("Audit trail: why is each company flagged?"):
-    st.markdown(
-        "Every ✅ below is a normalized-name match against the IND register; the KvK "
-        "number links to the public Chamber of Commerce search so you can verify it "
-        "yourself. The LLM line (when present) is the *secondary* text-based signal."
+grid = ui.add_salary_eur(df)
+view = grid[
+    [
+        "title",
+        "company_name",
+        "sponsorship",
+        "sponsor_kvk",
+        "salary_eur",
+        "posted_at",
+        "source_url",
+        "source",
+    ]
+]
+
+event = st.dataframe(
+    view,
+    width="stretch",
+    hide_index=True,
+    on_select="rerun",
+    selection_mode="single-row",
+    height=420,
+    column_config=ui.posting_columns(),
+)
+
+rows = event.selection.rows if event.selection else []
+if not rows:
+    st.info(
+        "👆 Select a posting to open its evidence — the register match and the LLM's read, side by side."
     )
-    for _, row in df.head(25).iterrows():
-        lines = [f"**{row['title']} — {row['company_name']}**"]
-        if row["is_recognised_sponsor"]:
-            kvk = row["sponsor_kvk"]
-            kvk_txt = (
-                f" ([KvK {kvk}](https://www.kvk.nl/zoeken/?source=all&q={kvk}))" if kvk else ""
+    ui.page_footer()
+    st.stop()
+
+row = df.iloc[rows[0]]
+st.divider()
+st.markdown(f"#### {row['title']} — {row['company_name']}")
+
+ev1, ev2 = st.columns(2, gap="large")
+
+with ev1:
+    st.markdown("##### 🏛️ Deterministic signal — *primary*")
+    if row["is_recognised_sponsor"]:
+        st.success("**Recognised sponsor.** This employer is on the IND register.")
+        st.markdown(f"Matched register entry: **{row['company_name']}**")
+        kvk = row["sponsor_kvk"]
+        if kvk and not pd.isna(kvk):
+            st.markdown(
+                f"KvK number **{kvk}** — "
+                f"[verify on the public Chamber of Commerce registry ↗]"
+                f"(https://www.kvk.nl/zoeken/?source=all&q={kvk})"
             )
-            lines.append(f"✅ IND recognised sponsor{kvk_txt} — legally authorised to sponsor.")
-        if row["visa_evidence"]:
-            lines.append(f"🧠 LLM ({row['visa_status']}): _{row['visa_evidence']}_")
-        if len(lines) > 1:
-            st.markdown("  \n".join(lines))
+        else:
+            st.caption("The register lists this organisation without a KvK number.")
+        st.caption(
+            "Produced by a normalized-name join against the IND seed — the same "
+            "normalization is applied to both sides. No model, no confidence score, "
+            "nothing to hallucinate."
+        )
+    else:
+        st.info("**No register match.** This company is not on the IND recognised-sponsor list.")
+        st.caption(
+            "That is a fact about the register, not about the company's intentions — "
+            "and it is irrelevant if you already hold an EU passport."
+        )
+
+with ev2:
+    st.markdown("##### 🧠 LLM read of the text — *secondary*")
+    if not row["is_enriched"]:
+        st.warning("**Not yet classified.** The classifier has not read this posting.")
+        st.caption(
+            "Enrichment is capped by the free Gemini quota (~50 postings/day) and "
+            "accumulates daily, NL first. This is an absence of evidence, not evidence "
+            "of absence — do not read it as 'no sponsorship'."
+        )
+    else:
+        st.markdown(f"**{ui.visa_label(row['visa_status'], is_enriched=True)}**")
+        if pd.notna(row["llm_confidence"]):
+            st.progress(
+                float(row["llm_confidence"]),
+                text=f"model confidence {float(row['llm_confidence']):.0%}",
+            )
+        if row["visa_evidence"] and not pd.isna(row["visa_evidence"]):
+            st.markdown("**Verbatim evidence quoted from the posting:**")
+            st.markdown(f"> {row['visa_evidence']}")
+        else:
+            st.caption("The model quoted no supporting sentence — treat the read as weak.")
+        if row["visa_reasoning"] and not pd.isna(row["visa_reasoning"]):
+            st.caption(f"Model's rationale: {row['visa_reasoning']}")
+
+st.link_button("Open the original posting ↗", row["source_url"])
+
+ui.page_footer()
