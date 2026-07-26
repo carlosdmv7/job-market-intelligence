@@ -153,7 +153,11 @@ MARKETS = {
 
 
 def market_label(country_code: str | None) -> str:
-    if country_code is None or country_code != country_code:  # None or NaN
+    # `x != x` catches float NaN but *raises* on pd.NA, which DuckDB returns
+    # for some nullable dtypes — so go through pd.isna instead.
+    import pandas as pd
+
+    if country_code is None or (pd.api.types.is_scalar(country_code) and pd.isna(country_code)):
         return "🌍 Remote / global"
     return MARKETS.get(country_code, country_code)
 
@@ -246,7 +250,11 @@ def add_salary_eur(df: pd.DataFrame) -> pd.DataFrame:
         return round(amount * factor) if factor else None
 
     out = df.copy()
-    out["salary_eur"] = out["salary_raw"].map(_one) if "salary_raw" in out else None
+    parsed = out["salary_raw"].map(_one) if "salary_raw" in out else None
+    # Force a float dtype: an object column of Nones renders as the literal
+    # string "None" in st.dataframe, which reads as a value rather than as the
+    # absence of one.
+    out["salary_eur"] = pd.to_numeric(parsed, errors="coerce") if parsed is not None else pd.NA
     return out
 
 

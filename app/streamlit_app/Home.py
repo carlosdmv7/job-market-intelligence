@@ -66,13 +66,15 @@ nl_rate, nl_sponsors, nl_companies = _rate("nl")
 remote_rate, remote_sponsors, remote_companies = _rate("remote")
 
 d1, d2, d3 = st.columns([2, 2, 3], gap="large")
+# Short labels on purpose: the heading above already says these are recognised-
+# sponsor rates, and a truncated metric label reads as a bug.
 d1.metric(
-    "Recognised sponsors — NL local corpus",
+    "NL local corpus",
     f"{nl_rate:.0%}",
     help=f"{nl_sponsors:,} of {nl_companies:,} companies are on the IND register.",
 )
 d2.metric(
-    "Recognised sponsors — remote-first boards",
+    "Remote-first boards",
     f"{remote_rate:.0%}",
     help=f"{remote_sponsors:,} of {remote_companies:,} companies are on the IND register.",
 )
@@ -144,8 +146,11 @@ with right:
             ),
             "enriched": st.column_config.NumberColumn("LLM-read"),
             "unclassified": st.column_config.NumberColumn(
-                "Not yet classified",
-                help="Awaiting the LLM within the free daily quota — not a negative result.",
+                "Unclassified",
+                help=(
+                    "Not yet read by the LLM — awaiting the free daily quota. "
+                    "Not a negative result."
+                ),
             ),
         },
     )

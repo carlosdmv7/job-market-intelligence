@@ -12,6 +12,29 @@ guard-railed natural-language **"Ask the Data"** agent.
 Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
 [ADR 0005](docs/adr/0005-zero-cost-stack.md)).
 
+[![The NL Visa Audit page: sponsor rates, the IND cross-reference, and per-posting evidence](docs/img/visa-sponsorship.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/NL_Visa_Audit)
+
+<details>
+<summary><b>More screens</b> — landing page, Market Trends, Ask the Data, How It Works</summary>
+
+**Landing page** — leads with the measured sponsor-rate gap, not the stack.
+
+![Landing page with the sponsor-rate contrast and per-market breakdown](docs/img/home.png)
+
+**Market Trends** — composition and movement over time; colour is always the visa signal.
+
+![Market Trends: top hiring companies by visa signal, postings by source and market, daily snapshots](docs/img/market-trends.png)
+
+**Ask the Data** — natural language in, guard-railed read-only SQL out.
+
+![Ask the Data: question box and example prompts, with the live provider and model shown](docs/img/ask-the-data.png)
+
+**How It Works** — the real prompt, live coverage, and the classifier's eval scores.
+
+![How It Works: the pipeline, the two visa signals, the system prompt, and the eval harness](docs/img/how-it-works.png)
+
+</details>
+
 ## The differentiating feature: auditable visa-sponsorship detection
 
 Most "AI job board" projects ask an LLM whether a posting sponsors visas and

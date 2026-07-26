@@ -123,7 +123,9 @@ else:
             .encode(
                 x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
                 y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                color=alt.Color("market:N", title=None),
+                # Half-width chart with five series: let the legend wrap instead of
+                # clipping the last label.
+                color=alt.Color("market:N", title=None, legend=alt.Legend(columns=2)),
                 tooltip=[
                     alt.Tooltip("date_key:T", title="day"),
                     "market:N",
@@ -144,7 +146,7 @@ else:
             .encode(
                 x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
                 y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                color=alt.Color("source:N", title=None),
+                color=alt.Color("source:N", title=None, legend=alt.Legend(columns=2)),
                 tooltip=[
                     alt.Tooltip("date_key:T", title="day"),
                     "source:N",
