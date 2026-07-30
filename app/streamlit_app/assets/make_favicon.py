@@ -46,7 +46,7 @@ def build() -> Image.Image:
         [SIZE * 0.28 - r, SIZE * 0.72 - r, SIZE * 0.28 + r, SIZE * 0.72 + r],
         fill=RUST_500,
     )
-    return img.resize((256, 256), Image.LANCZOS)
+    return img.resize((256, 256), Image.Resampling.LANCZOS)
 
 
 if __name__ == "__main__":

@@ -162,7 +162,7 @@ def _items(value) -> list:
     return list(value)
 
 
-rows = event.selection.rows if event.selection else []
+rows = ui.selected_rows(event)
 if not rows:
     st.info("👆 Select a row to open the posting card.")
     ui.page_footer()

@@ -169,7 +169,7 @@ event = st.dataframe(
     column_config=ui.posting_columns(),
 )
 
-rows = event.selection.rows if event.selection else []
+rows = ui.selected_rows(event)
 if not rows:
     st.info(
         "👆 Select a posting to open its evidence — the register match and the LLM's read, side by side."

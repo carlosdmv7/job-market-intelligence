@@ -10,7 +10,7 @@ them. Only current APIs: ``alt.theme`` (Altair 6) and ``width="stretch"``
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 import altair as alt
 import streamlit as st
@@ -166,6 +166,18 @@ def table(df: pd.DataFrame, **kwargs) -> None:
     st.dataframe(df, width="stretch", hide_index=True, **kwargs)
 
 
+def selected_rows(event: Any) -> list[int]:
+    """Positional indices selected in an ``on_select="rerun"`` dataframe.
+
+    Streamlit's return type for that call is ``DataframeState``, which its own
+    stubs declare without the ``selection`` attribute the runtime always sets —
+    so every caller would otherwise carry the same type: ignore. One typed
+    accessor instead, and the pages read better for it.
+    """
+    selection = getattr(event, "selection", None)
+    return list(getattr(selection, "rows", []) or [])
+
+
 def hbar(
     df: pd.DataFrame,
     label: str,
@@ -312,7 +324,7 @@ FAVICON = str(Path(__file__).with_name("assets") / "favicon.png")
 _SUITE = "Job Market Intelligence"
 
 
-def configure_page(page_title: str, *, layout: str = "wide") -> None:
+def configure_page(page_title: str, *, layout: Literal["centered", "wide"] = "wide") -> None:
     """``st.set_page_config`` — must be the first Streamlit call on a page.
 
     Titles are suffixed with the product name so a pinned browser tab still

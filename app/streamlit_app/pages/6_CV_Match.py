@@ -142,7 +142,7 @@ event = st.dataframe(
 )
 
 # --- LLM tier: one-call deep-dive on the selected posting --------------------
-rows = event.selection.rows if event.selection else []
+rows = ui.selected_rows(event)
 if not rows:
     st.info("👆 Select a posting to unlock the LLM deep-dive.")
     st.stop()

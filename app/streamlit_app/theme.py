@@ -100,7 +100,7 @@ def _brand_theme() -> alt.theme.ThemeConfig:
     """Altair config built from the tokens above — the charts' half of the brand."""
     return {
         "config": {
-            "background": None,  # inherit the Streamlit surface
+            "background": "transparent",  # inherit the Streamlit surface
             "font": FONT,
             "view": {"stroke": None},
             "axis": {

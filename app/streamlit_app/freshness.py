@@ -23,7 +23,7 @@ import pandas as pd
 import streamlit as st
 
 from streamlit_app.db import run_df
-from streamlit_app.theme import Fact
+from streamlit_app.theme import Fact, Tone
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SEED_META = _REPO_ROOT / "dbt" / "jmi" / "seeds" / "recognised_sponsors.meta.json"
@@ -34,7 +34,7 @@ _RUN_RESULTS = _REPO_ROOT / "dbt" / "jmi" / "target" / "run_results.json"
 _STATUS_FILE = _REPO_ROOT / "docs" / "status" / "pipeline.json"
 
 
-def _age(ts: Any) -> tuple[str, str]:
+def _age(ts: Any) -> tuple[str, Tone]:
     """Human age + tone. Daily pipeline, so >48h stale is a real problem."""
     if ts is None or pd.isna(ts):
         return "unknown", "bad"

@@ -19,7 +19,7 @@ lint: ## Lint (no changes)
 	uv run ruff format --check .
 
 type: ## Type-check
-	uv run mypy libs scrapers enrichment orchestration
+	uv run mypy libs scrapers enrichment orchestration app
 
 test: ## Run the test suite
 	uv run pytest
