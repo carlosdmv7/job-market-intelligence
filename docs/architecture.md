@@ -1,8 +1,11 @@
 # Architecture
 
 ```
- free public job APIs (Remotive, Arbeitnow, RemoteOK)        [httpx, no key]
- Adzuna per-country search (NL — the relocation corpus)      [httpx, free key]
+ 5 operational sources, all via jmi_scrapers:
+   Remotive, Arbeitnow, RemoteOK  (remote-first boards)      [httpx, no key]
+   JobTech (Platsbanken, SE)                                 [httpx, no key]
+   Adzuna per-country (NL/DE/ES — the relocation corpora)    [httpx, free key]
+   (honeypot is registered but unverified — not counted, not run)
             │  jmi_scrapers → canonical JobPosting
             ▼
  Prefect-instrumented flows (orchestration/jmi_flows), run daily by
@@ -21,7 +24,8 @@
             │
             ▼
  Streamlit app (app/streamlit_app)
-   pages: Visa Sponsorship · Market Trends · Ask the Data (text-to-SQL agent)
+   6 pages: Job Explorer · Market Trends · NL Visa Audit ·
+            Ask the Data (text-to-SQL agent) · CV Match · How It Works
 ```
 
 ## Layers & grain

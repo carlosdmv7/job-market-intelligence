@@ -94,13 +94,27 @@ functions in [`cv_match.py`](app/streamlit_app/cv_match.py) — no Streamlit, un
 ## Architecture
 
 ```
-free APIs + Adzuna NL/DE/ES + JobTech SE ──httpx──► ingest ─► raw.raw_job_postings (append-only)
+5 job sources ──httpx──► ingest ─► raw.raw_job_postings (append-only)
 IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichment  (LLM output)
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
    Streamlit: Explorer · Trends · NL Visa Audit · Ask the Data · CV Match · How It Works
 ```
+
+**The 5 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
+
+| Source | Coverage | Key |
+|---|---|---|
+| `remotive` | Remote-first boards | none |
+| `arbeitnow` | Remote-first boards, DE-leaning | none |
+| `remoteok` | Remote-first boards | none |
+| `jobtech` | Sweden (Platsbanken, public employment service) | none |
+| `adzuna` | Per-country local corpora — NL, DE, ES | free key |
+
+A sixth scraper, `honeypot`, is registered but **not verified** — its API is
+unconfirmed, it is not in `DEFAULT_SOURCES`, and the daily pipeline does not
+call it. It is a hook, not a source, and is excluded from every count here.
 
 dbt lineage (rendered from the real DAG — 9 models, 1 seed, 45 data tests):
 
@@ -160,7 +174,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | Contracts (Pydantic v2, `content_hash`, `SCHEMA_VERSION`) | Production-grade: versioned, hash-stable, 100% typed |
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
 | dbt medallion (dedup grain, quality tests) | Production-grade: 45 data tests incl. grain + invariant tests |
-| Ingestion breadth | Demo: 4 free boards + Adzuna (NL/DE/ES) + JobTech (SE) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
+| Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: Gemini free tier caps daily throughput; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
@@ -171,7 +185,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | Path | What |
 |---|---|
 | [libs/jmi_core](libs/jmi_core) | Canonical Pydantic contracts, settings, logging, MotherDuck client |
-| [scrapers](scrapers) | `httpx` scrapers: free APIs, Adzuna per-country, IND sponsor register |
+| [scrapers](scrapers) | The 5 operational `httpx` scrapers + the IND sponsor register |
 | [enrichment](enrichment) | Pluggable LLM providers (Ollama/Gemini/Anthropic), salary parser, dedup |
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
