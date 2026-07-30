@@ -108,3 +108,25 @@ jobs:
             git commit -m "Daily pipeline: record dbt run status [skip ci]"
             git push
           fi
+
+      # The public one-file summary: warehouse size, last ingest, dbt tests, and
+      # how this run ended. Runs on failed days too — a status file that only
+      # appears when the pipeline is green cannot tell you it stopped.
+      - name: publish status
+        if: always()
+        env:
+          JMI_RUN_CONCLUSION: ${{ job.status }}
+        run: |
+          uv run python -m jmi_flows.publish_status
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/status.json
+          if git diff --cached --quiet; then
+            echo "status unchanged"
+          else
+            git commit -m "Daily pipeline: publish status.json [skip ci]"
+            # The step above may have pushed already; rebase onto whatever is
+            # on main now rather than racing it.
+            git pull --rebase --autostash
+            git push
+          fi
