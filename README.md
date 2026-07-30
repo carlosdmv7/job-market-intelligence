@@ -261,3 +261,7 @@ sponsor. Why the golden set is the contract:
 
 Python 3.11 · Pydantic v2 · DuckDB/MotherDuck · dbt · Prefect · httpx ·
 Gemini/Ollama · Streamlit · Altair · uv · ruff · mypy · pytest · GitHub Actions.
+
+## License
+
+[MIT](LICENSE).
