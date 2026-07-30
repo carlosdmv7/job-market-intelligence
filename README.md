@@ -5,8 +5,9 @@
 
 An end-to-end **data-engineering + analytics-engineering + LLM** project that
 ingests EU tech jobs daily, enriches them with an LLM, models them dimensionally
-with dbt, and serves the result through a Streamlit app — including a
-guard-railed natural-language **"Ask the Data"** agent.
+with dbt, and serves the result through a 6-page Streamlit app — including a
+guard-railed natural-language **"Ask the Data"** agent and a session-only
+**CV Match**.
 
 **Live app:** [job-market-intelligence-carlosdmv7.streamlit.app](https://job-market-intelligence-carlosdmv7.streamlit.app/) · **Runs at 0€** end to end (MotherDuck free tier,
 Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
@@ -64,6 +65,32 @@ Why it matters, measured on this corpus: on remote-first job boards only
 it is **~34%** — the deterministic signal is what makes the tool actually
 useful for relocation, and it works even for postings the LLM never saw.
 
+## The app: six pages
+
+| Page | What it answers |
+|---|---|
+| **Job Explorer** | Every posting as a filterable card: market, role family, seniority, parsed salary, both visa signals |
+| **Market Trends** | Composition and movement over time — hiring companies, sources, markets, daily snapshots |
+| **NL Visa Audit** | The killer feature: sponsor rates, the IND register cross-reference, per-posting evidence |
+| **Ask the Data** | Natural language in, guard-railed read-only SQL out, with the generated SQL always shown |
+| **CV Match** | Your CV against the whole corpus — free skill-overlap ranking, then one LLM call on the posting you pick |
+| **How It Works** | The real prompt, live enrichment coverage, and the classifier's eval scores |
+
+**CV Match** (added 19 Jul 2026) is deliberately two-tier, for the same reason
+the visa signal is: spend nothing where determinism suffices, spend the LLM
+where it earns its cost.
+
+1. **Free and instant** — the CV is intersected with the technology vocabulary
+   the LLM *already* extracted from postings, and every enriched posting is
+   ranked by skill overlap. No API call, works across the whole corpus.
+2. **One call, on demand** — the posting you select plus the CV go to the
+   provider for a match percentage, honest gaps, and concrete CV edits.
+
+The CV lives in `st.session_state` only: never written to the warehouse, a
+file, or the logs, and discarded when the tab closes. The single deep-dive
+request is the only thing that ever leaves the session. Scoring logic is pure
+functions in [`cv_match.py`](app/streamlit_app/cv_match.py) — no Streamlit, unit-tested.
+
 ## Architecture
 
 ```
@@ -72,7 +99,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
-        Streamlit: Explorer (job cards) · Trends · NL Visa Audit · Ask the Data · How It Works
+   Streamlit: Explorer · Trends · NL Visa Audit · Ask the Data · CV Match · How It Works
 ```
 
 dbt lineage (rendered from the real DAG — 9 models, 1 seed, 45 data tests):
@@ -148,7 +175,7 @@ lifetimes and market trends accumulate one snapshot per day.
 | [enrichment](enrichment) | Pluggable LLM providers (Ollama/Gemini/Anthropic), salary parser, dedup |
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
-| [app](app) | Streamlit app + controlled text-to-SQL agent |
+| [app](app) | Streamlit app (6 pages, incl. CV Match) + controlled text-to-SQL agent |
 | [evals](evals) | Golden-set eval harness for the visa classifier (sampler, replay, metrics) |
 | [infra](infra) | Docker Compose (Ollama + app), Dockerfiles |
 | [docs](docs) | Architecture + ADRs |
