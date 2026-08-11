@@ -18,38 +18,29 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from jmi_flows.dbt_artifacts import is_test, passed
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUN_RESULTS = _REPO_ROOT / "dbt" / "jmi" / "target" / "run_results.json"
 DEFAULT_OUT = _REPO_ROOT / "docs" / "status" / "pipeline.json"
-
-#: dbt result statuses that mean "this node did not do its job".
-_FAILING = {"error", "fail", "runtime error"}
 
 
 def summarize(run_results: dict[str, Any]) -> dict[str, Any]:
     """Reduce a dbt run to the handful of numbers the app displays."""
     results = run_results.get("results") or []
-    tests = [r for r in results if _is_test(r)]
-    models = [r for r in results if not _is_test(r)]
-
-    def _passed(rows: list[dict[str, Any]]) -> int:
-        return sum(1 for r in rows if str(r.get("status", "")).lower() not in _FAILING)
+    test_nodes = [r for r in results if is_test(r)]
+    model_nodes = [r for r in results if not is_test(r)]
 
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "run_started_at": (run_results.get("metadata") or {}).get("generated_at"),
         "dbt_version": (run_results.get("metadata") or {}).get("dbt_version"),
-        "tests_total": len(tests),
-        "tests_passed": _passed(tests),
-        "models_total": len(models),
-        "models_passed": _passed(models),
+        "tests_total": len(test_nodes),
+        "tests_passed": passed(test_nodes),
+        "models_total": len(model_nodes),
+        "models_passed": passed(model_nodes),
         "elapsed_seconds": round(float(run_results.get("elapsed_time") or 0.0), 1),
     }
-
-
-def _is_test(result: dict[str, Any]) -> bool:
-    """dbt tags every node; the unique_id prefix is the reliable discriminator."""
-    return str(result.get("unique_id", "")).startswith("test.")
 
 
 def main() -> None:
