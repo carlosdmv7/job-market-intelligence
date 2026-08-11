@@ -16,9 +16,11 @@ from streamlit_app.db import require_marts, run_df
 
 from jmi_core.text import strip_html
 
-st.set_page_config(page_title="Job Explorer", page_icon="🔎", layout="wide")
-st.title("🔎 Job Explorer")
-st.caption("All markets, all sources. Select a row to open the full posting card.")
+ui.configure_page("Job Explorer")
+ui.page_header(
+    title="🔎 Job Explorer",
+    subtitle="All markets, all sources. Select a row to open the full posting card.",
+)
 
 require_marts(
     "marts.FT_JOB_POSTING",
@@ -44,15 +46,16 @@ f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
 picked_markets = f1.multiselect("Market", market_options, default=[])
 search = f2.text_input("Title or company contains", placeholder="engineer, dbt, Spotify…")
 picked_techs = f3.multiselect("Technologies (LLM-extracted)", techs)
-sort = f4.selectbox("Sort by", ["Newest", "Language fit", "Visa signal"])
+sort = f4.selectbox("Sort by", ["Visa signal", "Newest", "Language fit"])
 
 ORDERINGS = {
-    "Newest": "last_seen_at desc",
-    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
+    # Default: the signal this app exists for, then recency.
     "Visa signal": (
-        "is_recognised_sponsor desc, "
+        f"{ui.POSTINGS_ORDER.split(',')[0]}, "
         "(visa_status in ('explicit_yes', 'likely_yes')) desc, last_seen_at desc"
     ),
+    "Newest": "last_seen_at desc",
+    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
 }
 
 g1, g2, g3, g4 = st.columns(4, gap="medium")
@@ -98,7 +101,8 @@ df = run_df(
         visa_reasoning, is_enriched, english_sufficient, requires_local_language,
         working_languages, relocation_support, technologies, normalized_role,
         enrichment_model, enrichment_prompt_version, enriched_at, enrichment_confidence,
-        remote_policy, employment_type
+        remote_policy, employment_type,
+        {ui.SPONSORSHIP_SQL} as sponsorship
     from marts.FT_JOB_POSTING
     {where}
     order by {ORDERINGS[sort]}
@@ -109,19 +113,22 @@ df = run_df(
 
 st.caption(f"**{len(df):,}** matching postings (showing up to 1,000).")
 
-view = df[
+grid = ui.add_salary_eur(df)
+grid["market"] = grid["country_code"].map(ui.market_label)
+view = grid[
     [
         "title",
         "company_name",
+        "market",
         "seniority",
+        "sponsorship",
         "english_sufficient",
-        "is_recognised_sponsor",
-        "visa_status",
-        "salary_raw",
+        "salary_eur",
+        "posted_at",
+        "source_url",
         "source",
     ]
-].copy()
-view.insert(2, "market", df["country_code"].map(ui.market_label))
+]
 
 event = st.dataframe(
     view,
@@ -130,21 +137,13 @@ event = st.dataframe(
     on_select="rerun",
     selection_mode="single-row",
     height=420,
-    column_config={
-        "title": st.column_config.TextColumn("Title", width="large"),
-        "company_name": st.column_config.TextColumn("Company"),
-        "market": st.column_config.TextColumn("Market"),
-        "seniority": st.column_config.TextColumn("Seniority"),
-        "english_sufficient": st.column_config.CheckboxColumn(
-            "EN ok", help="English alone is enough, per the LLM read. Empty = not enriched yet."
+    column_config=ui.posting_columns(
+        seniority=st.column_config.TextColumn("Seniority"),
+        english_sufficient=st.column_config.CheckboxColumn(
+            "EN ok",
+            help="English alone is enough, per the LLM read. Empty = not yet classified.",
         ),
-        "is_recognised_sponsor": st.column_config.CheckboxColumn(
-            "Visa", help="Company can legally sponsor a NL work visa (IND list)."
-        ),
-        "visa_status": st.column_config.TextColumn("LLM visa read"),
-        "salary_raw": st.column_config.TextColumn("Salary (raw)"),
-        "source": st.column_config.TextColumn("Source"),
-    },
+    ),
 )
 
 
@@ -163,9 +162,10 @@ def _items(value) -> list:
     return list(value)
 
 
-rows = event.selection.rows if event.selection else []
+rows = ui.selected_rows(event)
 if not rows:
     st.info("👆 Select a row to open the posting card.")
+    ui.page_footer()
     st.stop()
 
 row = df.iloc[rows[0]]
@@ -198,7 +198,7 @@ sig1, sig2 = st.columns(2, gap="large")
 with sig1:
     st.markdown("##### 🗣️ Can you work there in English?")
     if not row["is_enriched"]:
-        st.markdown("_Not yet enriched._ Coverage accumulates daily within the free LLM quota.")
+        st.markdown("_Not yet classified._ Coverage accumulates daily within the free LLM quota.")
     else:
         if pd.isna(row["english_sufficient"]):
             st.markdown("The text doesn't say which language the job needs.")
@@ -232,7 +232,11 @@ with sig1:
 with sig2:
     st.markdown("##### 🧠 What the LLM read in the text")
     if not row["is_enriched"]:
-        st.markdown("_Not yet enriched._")
+        st.warning("**Not yet classified** — the LLM has not read this posting.")
+        st.caption(
+            "Absence of evidence, not evidence of absence: this is *not* a finding of "
+            "'no sponsorship'. The register match on the left is unaffected."
+        )
     else:
         st.markdown(f"**{ui.VISA_LABELS.get(row['visa_status'], row['visa_status'])}**")
         if pd.notna(row["visa_confidence"]):
@@ -266,3 +270,5 @@ with st.expander("Full description (as scraped)"):
         st.text(text)
     else:
         st.markdown("_No description captured for this posting._")
+
+ui.page_footer()

@@ -11,6 +11,7 @@ client-side (lenient extraction); Anthropic uses native structured outputs.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
@@ -31,6 +32,18 @@ _ANTHROPIC_PRICING: dict[str, tuple[float, float]] = {
 
 class ClassificationError(RuntimeError):
     """Raised when a provider refuses or returns no parseable output."""
+
+
+# Gemini authenticates with a `key=` query parameter, so httpx's error messages
+# embed the API key in the failing URL. Those messages are surfaced verbatim in
+# the Streamlit app, which is public — so every provider error is scrubbed
+# before it becomes an exception message.
+_SECRET_QS_RE = re.compile(r"([?&](?:key|api_key|access_token)=)[^&\s'\"]+", re.IGNORECASE)
+
+
+def redact(text: str) -> str:
+    """Mask credentials embedded in a URL inside an error message."""
+    return _SECRET_QS_RE.sub(r"\1[REDACTED]", text)
 
 
 @dataclass(slots=True)
@@ -118,7 +131,7 @@ class OllamaProvider:
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            raise ClassificationError(f"ollama request failed: {exc}") from exc
+            raise ClassificationError(f"ollama request failed: {redact(str(exc))}") from exc
 
         data = resp.json()
         content = (data.get("message") or {}).get("content", "")
@@ -195,14 +208,14 @@ class GeminiProvider:
                 )
                 self._last_call = time.monotonic()
             except httpx.HTTPError as exc:
-                raise ClassificationError(f"gemini request failed: {exc}") from exc
+                raise ClassificationError(f"gemini request failed: {redact(str(exc))}") from exc
             if resp.status_code in (429, 503) and attempt < self.max_retries:
                 time.sleep(self._backoff(resp, attempt))
                 continue
             try:
                 resp.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ClassificationError(f"gemini request failed: {exc}") from exc
+                raise ClassificationError(f"gemini request failed: {redact(str(exc))}") from exc
             return resp.json()
         raise ClassificationError(
             "gemini rate limit: exhausted retries (free-tier RPM/RPD likely hit)"

@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 import unicodedata
+from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
 
@@ -145,7 +147,26 @@ def write_seed(rows: list[tuple[str, str]], path: Path = _SEED_PATH) -> Path:
         writer = csv.writer(fh)
         writer.writerow(["organisation", "kvk_number"])
         writer.writerows(rows)
+    write_seed_meta(rows, path)
     return path
+
+
+def write_seed_meta(rows: list[tuple[str, str]], seed_path: Path = _SEED_PATH) -> Path:
+    """Record *when* the register was last pulled, next to the seed itself.
+
+    The register has no version or date column, so without this the app could
+    only guess at the seed's age (or hardcode it — which would be a lie the
+    moment the seed is refreshed). Committed alongside the CSV, so the deployed
+    app can state the refresh date it is actually serving.
+    """
+    meta_path = seed_path.with_suffix(".meta.json")
+    meta = {
+        "source_url": IND_REGISTER_URL,
+        "refreshed_at": datetime.now(UTC).date().isoformat(),
+        "row_count": len(rows),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return meta_path
 
 
 def main() -> None:

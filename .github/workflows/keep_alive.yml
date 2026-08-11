@@ -1,0 +1,58 @@
+name: Keep the app awake
+
+# Streamlit Community Cloud sleeps an app after a few days without traffic, and
+# a sleeping app greets a recruiter with a "wake this app up?" button instead of
+# the project. A cheap GET every 6 hours keeps it warm.
+#
+# This only pings the public URL — it holds no secrets and touches no data.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # off the hour: shared GitHub cron slots are congested
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping the Streamlit app
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET the app
+        run: |
+          set -uo pipefail
+          url="https://job-market-intelligence-carlosdmv7.streamlit.app/"
+
+          # No -L on purpose. A healthy Streamlit Community Cloud app answers the
+          # bare URL with a 303 to its own session route; following that redirect
+          # would hide whether the app itself responded. A cold app can still take
+          # a while to boot, so allow a generous timeout and one retry.
+          code=$(curl -sS --max-time 90 --retry 2 --retry-delay 15 \
+                      -o /dev/null -w '%{http_code}' "$url")
+          echo "$url -> HTTP $code"
+
+          case "$code" in
+            200|303)
+              echo "app is awake"
+              ;;
+            000)
+              # curl never got an answer: DNS, TLS or connection failure.
+              echo "::error::no response from $url (curl exit / connection failure)"
+              exit 1
+              ;;
+            5*)
+              echo "::error::app returned HTTP $code"
+              exit 1
+              ;;
+            *)
+              # 4xx and other redirects are odd but not proof the app is down;
+              # surface them without training you to ignore a red cron.
+              echo "::warning::app returned HTTP $code (not failing the job)"
+              ;;
+          esac

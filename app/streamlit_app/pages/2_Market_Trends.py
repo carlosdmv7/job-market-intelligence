@@ -7,11 +7,13 @@ import streamlit as st
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
 
-st.set_page_config(page_title="Market Trends", page_icon="📈", layout="wide")
-st.title("📈 Market Trends")
-st.caption(
-    "What the tracked markets (🇳🇱 🇸🇪 🇩🇪 🇪🇸 + remote boards) look like right now, "
-    "and how they move over time."
+ui.configure_page("Market Trends")
+ui.page_header(
+    title="📈 Market Trends",
+    subtitle=(
+        "What the tracked markets (🇳🇱 🇸🇪 🇩🇪 🇪🇸 + remote boards) look like right now, "
+        "and how they move over time."
+    ),
 )
 
 require_marts(
@@ -21,38 +23,28 @@ require_marts(
 
 # --- current composition ---------------------------------------------------
 st.markdown("##### Top hiring companies")
-st.caption("Green = on the IND recognised-sponsor register (can sponsor a NL visa).")
+st.caption(
+    "Colour is the visa signal: a deterministic IND register match, a text-only signal "
+    "from the LLM, or a posting the LLM has not read yet."
+)
 comp = run_df(
-    """
-    select company_name,
-           max(cast(is_recognised_sponsor as int)) as sponsor,
-           count(*) as postings
-    from marts.FT_JOB_POSTING
-    where company_name is not null
-    group by 1 order by postings desc limit 15
-    """
-)
-comp["kind"] = comp["sponsor"].map({1: "Recognised sponsor", 0: "Other"})
-companies = (
-    alt.Chart(comp)
-    .mark_bar()
-    .encode(
-        y=alt.Y("company_name:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220)),
-        x=alt.X("postings:Q", title="postings", axis=alt.Axis(grid=True, tickCount=4)),
-        color=alt.Color(
-            "kind:N",
-            scale=alt.Scale(domain=["Recognised sponsor", "Other"], range=[ui.GOOD, ui.MUTED]),
-            title=None,
-        ),
-        tooltip=[
-            alt.Tooltip("company_name:N", title="company"),
-            alt.Tooltip("postings:Q"),
-            alt.Tooltip("kind:N", title="sponsor"),
-        ],
+    f"""
+    with ranked as (
+        select company_name, count(*) as postings
+        from marts.FT_JOB_POSTING
+        where company_name is not null
+        group by 1 order by postings desc limit 15
     )
-    .properties(height=max(160, len(comp) * 30 + 12))
+    select
+        f.company_name,
+        {ui.SPONSORSHIP_SQL} as sponsorship,
+        count(*) as postings
+    from marts.FT_JOB_POSTING f
+    join ranked r on r.company_name = f.company_name
+    group by 1, 2
+    """
 )
-ui.show(companies)
+ui.show(ui.sponsorship_bar(comp, "company_name", "postings", value_title="postings"))
 
 left, right = st.columns(2, gap="large")
 with left:
@@ -91,12 +83,12 @@ else:
     line = (
         alt.Chart(daily)
         .mark_area(
-            line={"color": ui.BLUE, "strokeWidth": 2},
+            line={"color": ui.PRIMARY, "strokeWidth": 2},
             color=alt.Gradient(
                 gradient="linear",
                 stops=[
-                    alt.GradientStop(color="#ffffff", offset=0),
-                    alt.GradientStop(color=ui.BLUE, offset=1),
+                    alt.GradientStop(color=ui.SURFACE_COLOR, offset=0),
+                    alt.GradientStop(color=ui.PRIMARY, offset=1),
                 ],
                 x1=1,
                 x2=1,
@@ -131,7 +123,9 @@ else:
             .encode(
                 x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
                 y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                color=alt.Color("market:N", title=None),
+                # Half-width chart with five series: let the legend wrap instead of
+                # clipping the last label.
+                color=alt.Color("market:N", title=None, legend=alt.Legend(columns=2)),
                 tooltip=[
                     alt.Tooltip("date_key:T", title="day"),
                     "market:N",
@@ -152,7 +146,7 @@ else:
             .encode(
                 x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
                 y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                color=alt.Color("source:N", title=None),
+                color=alt.Color("source:N", title=None, legend=alt.Legend(columns=2)),
                 tooltip=[
                     alt.Tooltip("date_key:T", title="day"),
                     "source:N",
@@ -161,3 +155,5 @@ else:
             )
             .properties(height=260)
         )
+
+ui.page_footer()

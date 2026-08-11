@@ -26,11 +26,13 @@ from jmi_core.settings import get_settings
 from jmi_core.text import strip_html
 from jmi_enrichment.providers import get_provider
 
-st.set_page_config(page_title="CV Match", page_icon="🎯", layout="wide")
-st.title("🎯 CV Match")
-st.caption(
-    "Upload or paste your CV → every LLM-enriched posting gets a skill-overlap score, "
-    "free and instant. Then spend **one** LLM call on the posting you care about."
+ui.configure_page("CV Match")
+ui.page_header(
+    title="🎯 CV Match",
+    subtitle=(
+        "Upload or paste your CV → every LLM-enriched posting gets a skill-overlap score, "
+        "free and instant. Then spend **one** LLM call on the posting you care about."
+    ),
 )
 st.info(
     "🔒 **Your CV never leaves this session.** It is not stored anywhere; closing the "
@@ -140,7 +142,7 @@ event = st.dataframe(
 )
 
 # --- LLM tier: one-call deep-dive on the selected posting --------------------
-rows = event.selection.rows if event.selection else []
+rows = ui.selected_rows(event)
 if not rows:
     st.info("👆 Select a posting to unlock the LLM deep-dive.")
     st.stop()
@@ -175,3 +177,5 @@ if st.button("Analyze my fit (1 LLM call)", type="primary"):
             st.error(f"The LLM call failed (likely a spent free-tier quota): {exc}")
             st.stop()
     st.markdown(answer)
+
+ui.page_footer()

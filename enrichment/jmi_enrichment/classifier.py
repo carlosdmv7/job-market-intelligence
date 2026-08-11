@@ -32,7 +32,16 @@ class JobClassifier:
         self.prompt_version = settings.enrichment_prompt_version
 
     def classify(self, posting: dict[str, Any]) -> JobEnrichment:
-        user = build_user_prompt(posting) + "\n\n" + json_output_instructions()
+        return self.classify_rendered(posting, build_user_prompt(posting))
+
+    def classify_rendered(self, posting: dict[str, Any], user_prompt: str) -> JobEnrichment:
+        """Classify from an already-rendered user prompt.
+
+        The eval harness needs this: its golden set pins the exact prompt text
+        each label was made against, so re-rendering from fields would let a
+        change in ``build_user_prompt`` alter the input under a fixed label.
+        """
+        user = user_prompt + "\n\n" + json_output_instructions()
         result, usage = self.provider.classify(
             system=SYSTEM_PROMPT, user=user, schema=LLMJobClassification
         )

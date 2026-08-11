@@ -33,22 +33,92 @@ jobs:
           uv run ruff format --check .
 
       - name: mypy
-        run: uv run mypy libs scrapers enrichment orchestration
+        run: uv run mypy libs scrapers enrichment orchestration app
 
       - name: pytest
         run: uv run pytest --cov=jmi_core --cov=jmi_scrapers --cov=jmi_enrichment --cov-report=term-missing
 
-  dbt:
-    name: dbt parse (DuckDB)
+  evals:
+    name: LLM evals (replayed, offline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
-      - name: dbt deps + parse (local DuckDB target)
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # No API key, no quota, no network: the classifier is scored against
+      # recorded production responses, so a red job means the prompt or the
+      # code changed — never that the model had a bad morning.
+      #
+      # While the golden set is still being labelled this prints "nothing to
+      # score" and passes. Once it is labelled, add --require-labels so an
+      # accidentally emptied golden set fails the build instead of skipping it.
+      - name: Score the visa classifier against the golden set
+        run: uv run python -m jmi_evals.runner --provider replay --check
+
+      - name: Upload the eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/report.json
+          if-no-files-found: ignore
+
+  dbt:
+    name: dbt build (DuckDB)
+    runs-on: ubuntu-latest
+    # `dbt parse` only proved the project compiles. The 45 data tests are the
+    # actual contract — grain, invariants, referential integrity — and they were
+    # never run until the nightly pipeline hit production. Build the whole DAG
+    # against a throwaway local DuckDB instead: no MotherDuck, no secrets, so it
+    # runs on pull requests from the first commit.
+    #
+    # The tables are empty, so this cannot catch a data problem. It catches
+    # every *structural* one: a test pointing at a renamed column, a broken ref,
+    # a seed that no longer loads, a model that does not materialize.
+    env:
+      DBT_TARGET: ci
+      DBT_DUCKDB_PATH: ${{ github.workspace }}/jmi_ci.duckdb
+      JMI_DUCKDB_DATABASE: ${{ github.workspace }}/jmi_ci.duckdb
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # dbt's sources (raw.raw_job_postings, raw.raw_job_enrichment) are owned by
+      # the ingestion flows, not by dbt — so create them from the same DDL the
+      # real warehouse uses. Empty, but shaped exactly like production.
+      - name: Create the raw schema (same DDL as production)
+        run: uv run python -m jmi_flows.warehouse_init
+
+      - name: dbt build (all models, seeds and 45 data tests)
         working-directory: dbt/jmi
-        env:
-          DBT_TARGET: ci
         run: |
-          uvx --with dbt-duckdb dbt deps
-          uvx --with dbt-duckdb dbt parse
+          uv run dbt deps
+          uv run dbt build
+
+      - name: Upload the dbt run results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-run-results
+          path: dbt/jmi/target/run_results.json
+          if-no-files-found: ignore

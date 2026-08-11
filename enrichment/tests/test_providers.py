@@ -109,3 +109,26 @@ def test_get_provider_selection():
 def test_gemini_requires_key():
     with pytest.raises(ClassificationError):
         GeminiProvider("gemini-2.0-flash", api_key=None)
+
+
+def test_provider_errors_never_leak_the_api_key():
+    """Gemini authenticates via a query parameter, so httpx's own error string
+    contains the key — and the Streamlit app prints provider errors verbatim on
+    a public page. Every provider error must be scrubbed first."""
+    from jmi_enrichment.providers import redact
+
+    raw = (
+        "Client error '429 Too Many Requests' for url "
+        "'https://generativelanguage.googleapis.com/v1beta/models/"
+        "gemini-2.5-flash-lite:generateContent?key=AQ.Ab8RN6JgKQB4qx7_secret'"
+    )
+    cleaned = redact(raw)
+    assert "AQ.Ab8RN6JgKQB4qx7_secret" not in cleaned
+    assert "key=[REDACTED]" in cleaned
+    assert "429 Too Many Requests" in cleaned  # the useful part survives
+
+    # Other credential-ish parameter names, and multi-param URLs.
+    assert redact("https://x/y?a=1&api_key=abc123&b=2") == (
+        "https://x/y?a=1&api_key=[REDACTED]&b=2"
+    )
+    assert redact("nothing sensitive here") == "nothing sensitive here"

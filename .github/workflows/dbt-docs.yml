@@ -1,0 +1,92 @@
+name: dbt docs
+
+# Publishes the dbt documentation site (lineage graph + every model, column
+# description and test) to GitHub Pages on merge to main.
+#
+# Built against a throwaway local DuckDB, not MotherDuck: `dbt docs generate`
+# needs the manifest and the catalog, and the catalog can be produced from an
+# empty database. That keeps the docs build off the warehouse's critical path
+# and means it needs no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dbt/**"
+      - ".github/workflows/dbt-docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false # never interrupt a half-finished deployment
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build dbt docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # dbt's sources are created by the Python stack, not by dbt, so an empty
+      # DuckDB file has nothing to select from. warehouse_init lays down the
+      # raw schemas and tables; the models then build over zero rows, which is
+      # all the catalog needs for real column types.
+      - name: Bootstrap an empty local warehouse
+        env:
+          JMI_DUCKDB_DATABASE: ${{ github.workspace }}/dbt_docs.duckdb
+        run: uv run python -m jmi_flows.warehouse_init
+
+      - name: Build the docs site
+        working-directory: dbt/jmi
+        env:
+          DBT_TARGET: ci
+          DBT_DUCKDB_PATH: ${{ github.workspace }}/dbt_docs.duckdb
+        run: |
+          uv run dbt deps
+          uv run dbt build
+          uv run dbt docs generate --static
+
+      - name: Collect the static site
+        run: |
+          mkdir -p _site
+          # --static emits a single self-contained page; fall back to the
+          # multi-file layout if a future dbt version drops that flag.
+          if [ -f dbt/jmi/target/static_index.html ]; then
+            cp dbt/jmi/target/static_index.html _site/index.html
+          else
+            cp dbt/jmi/target/index.html dbt/jmi/target/manifest.json \
+               dbt/jmi/target/catalog.json _site/
+          fi
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

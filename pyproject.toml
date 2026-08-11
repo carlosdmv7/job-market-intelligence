@@ -14,6 +14,9 @@ dependencies = [
     "jmi-flows",
     "jmi-app",
 ]
+# jmi-evals is deliberately absent: it is a workspace member (so `uv sync
+# --all-packages` builds it for dev and CI) but the deployed app never imports
+# it — the "How it works" page reads the committed evals/report.json instead.
 
 [dependency-groups]
 # `uv sync` installs these by default for local development.
@@ -28,7 +31,7 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["libs/*", "scrapers", "enrichment", "orchestration", "app"]
+members = ["libs/*", "scrapers", "enrichment", "orchestration", "app", "evals"]
 
 [tool.uv.sources]
 jmi-core = { workspace = true }
@@ -36,6 +39,7 @@ jmi-scrapers = { workspace = true }
 jmi-enrichment = { workspace = true }
 jmi-flows = { workspace = true }
 jmi-app = { workspace = true }
+jmi-evals = { workspace = true }
 
 # --- Tooling -----------------------------------------------------------------
 
@@ -49,7 +53,7 @@ select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
 ignore = ["E501"]  # line length handled by the formatter
 
 [tool.ruff.lint.isort]
-known-first-party = ["jmi_core", "jmi_scrapers", "jmi_enrichment", "jmi_flows"]
+known-first-party = ["jmi_core", "jmi_scrapers", "jmi_enrichment", "jmi_flows", "jmi_evals"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -60,5 +64,5 @@ disallow_untyped_defs = false
 exclude = ["dbt/", "build/"]
 
 [tool.pytest.ini_options]
-testpaths = ["libs", "scrapers", "enrichment", "orchestration", "app"]
+testpaths = ["libs", "scrapers", "enrichment", "orchestration", "app", "evals"]
 addopts = "-q"
