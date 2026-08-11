@@ -220,6 +220,9 @@ var away (`JMI_LLM_PROVIDER`) — the classifier and the agent share the setting
 make check        # ruff + mypy (strict-ish) + pytest
 ```
 
+Branch naming, Conventional Commits (enforced by a `commit-msg` hook), and the
+PR flow: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 CI runs lint, type-check, tests, and `dbt parse` on every push. The unit suite
 covers the contracts, scrapers, enrichment (incl. provider wiring), the
 pipeline functions, and the SQL guard — all offline, no warehouse or LLM
