@@ -27,6 +27,7 @@ from typing import Any
 from jmi_core.logging import get_logger
 from jmi_core.settings import get_settings
 from jmi_core.warehouse import Warehouse
+from jmi_flows.dbt_artifacts import passed, tests
 
 log = get_logger(__name__)
 
@@ -36,9 +37,6 @@ DEFAULT_RUN_RESULTS = _REPO_ROOT / "dbt" / "jmi" / "target" / "run_results.json"
 DEFAULT_OUT = _REPO_ROOT / "docs" / "status.json"
 
 PROJECT = "job-market-intelligence"
-
-#: dbt result statuses that mean "this node did not do its job".
-_FAILING = {"error", "fail", "runtime error"}
 
 
 def warehouse_facts() -> tuple[int | None, str | None]:
@@ -83,9 +81,8 @@ def count_passed_tests(run_results_path: Path) -> int | None:
     """How many data tests actually passed in the run that just happened."""
     if not run_results_path.exists():
         return None
-    results = json.loads(run_results_path.read_text(encoding="utf-8")).get("results") or []
-    tests = [r for r in results if str(r.get("unique_id", "")).startswith("test.")]
-    return sum(1 for r in tests if str(r.get("status", "")).lower() not in _FAILING)
+    run_results = json.loads(run_results_path.read_text(encoding="utf-8"))
+    return passed(tests(run_results))
 
 
 def build_status(
