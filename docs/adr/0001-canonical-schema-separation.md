@@ -19,3 +19,19 @@ prompt/model) changes.
 - Enrichment reruns never touch raw; raw stays replayable.
 - The daily snapshot fact falls out of the append-only raw log for free.
 - Two write paths instead of one (acceptable; loaders live in `jmi_core.warehouse`).
+
+## Alternatives considered
+
+- **One wide table with nullable LLM columns.** Simplest to query and one write
+  path instead of two. Rejected because every re-enrichment becomes a full-row
+  rewrite over immutable scraped data, and "never enriched" stops being
+  distinguishable from "enriched and found nothing" — the exact distinction the
+  visa feature depends on.
+- **Enrichment as a JSON blob on the raw row.** Keeps one table and stays
+  schema-flexible. Rejected: the fields are queried constantly (visa status,
+  role family, languages), so they would be unpacked in every model, and
+  Pydantic validation of the LLM output would have nothing to validate against.
+- **Key enrichment by `source_job_id` instead of `content_hash`.** Cheaper to
+  reason about, but a re-posted ad with edited text would keep a stale
+  classification. `content_hash` makes "the text changed" and "re-enrich this"
+  the same event.

@@ -20,3 +20,21 @@ in a dbt macro (`jmi_canonical_key`). `canonical_job_id` never appears in raw.
 - Raw stays immutable; dedup is a re-runnable transformation.
 - Embedding-based near-duplicate matching plugs into `int_` in Phase 2.
 - Two implementations of the normalization recipe to keep in sync (documented).
+
+## Alternatives considered
+
+- **Dedup at ingestion, before writing raw.** One less transformation and a
+  smaller warehouse. Rejected because it makes raw lossy: the clustering recipe
+  is the part most likely to change, and a bad heuristic would have already
+  discarded the evidence needed to fix it. Raw stays an event log precisely so
+  dedup can be re-run.
+- **Embedding similarity from day one.** Better on near-duplicates ("Sr. Data
+  Engineer" vs "Senior Data Engineer (m/f/d)"). Rejected as the *first* pass: it
+  costs an embedding call per posting against a 0€ budget, and it is
+  unfalsifiable without the deterministic baseline to compare against. The `int_`
+  layer is where it plugs in when there is a reason.
+- **One shared normalization implementation instead of two.** Calling the Python
+  recipe from dbt (or vice versa) removes the documented drift risk. Rejected:
+  it would mean a Python UDF inside the warehouse or a pre-materialized key
+  table, both of which trade a small, tested duplication for real operational
+  coupling.

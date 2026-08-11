@@ -25,3 +25,23 @@ through this interface, so the whole product is 0€ out of the box.
 - Cost tracking (`cost_usd`) is 0 for local/free providers; the Anthropic path
   still computes real cost with cache multipliers.
 - Adding sources changed `JobSource` → `SCHEMA_VERSION` 0.2.0.
+
+## Alternatives considered
+
+- **Keep Scrapfly and Claude Haiku, cap the spend.** The original plan, and it
+  covers LinkedIn/Indeed, which the free APIs do not. Rejected because "0€" was
+  a hard constraint, not a target: a capped budget still fails closed at the end
+  of the month, and a portfolio project that stops working when a card expires
+  demonstrates the wrong thing.
+- **Free tier of a single hosted LLM, wired in directly.** Less code than a
+  provider interface. Rejected: free tiers change terms and quotas without
+  notice, and the whole point is that `JMI_LLM_PROVIDER` can move between local
+  and hosted without touching the classifier or the agent.
+- **Ollama as the only provider.** Truly zero dependency on anyone's free tier.
+  Rejected as the *deployed* default: the app runs on Streamlit Community Cloud,
+  which has nothing like the RAM for a 7B model. Local stays the default for
+  development, hosted for deployment — which is why the interface exists.
+- **A paid always-on Prefect worker for orchestration.** The production-correct
+  answer, documented in `prefect.yaml`. Rejected here for the same 0€ reason;
+  GitHub Actions cron is the substitute, and the flows stay Prefect-instrumented
+  so the real path is a deployment away.
