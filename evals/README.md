@@ -16,9 +16,11 @@ Why this exists and what the labels mean:
 # 1. Sample (deterministic, stratified, additive — existing labels survive).
 make evals-sample                      # or: --size 200 --dry-run to see the strata
 
-# 2. Label by hand: set "visa_status_true" on each line.
-#    explicit_yes | likely_yes | unclear | likely_no | explicit_no
-#    Label what the TEXT claims, never what you know about the employer.
+# 2. Label by hand — keys 1-5, saves after every label.
+make evals-label                       # or: LIMIT=25 for a short sitting
+#    Postings that actually discuss the right to work come first, and the
+#    vocabulary is highlighted. It shows you no suggested answer: the whole
+#    point is that the label is yours. Editing the JSONL by hand still works.
 
 # 3. Harvest the model outputs the pipeline already stored.
 make evals-record
