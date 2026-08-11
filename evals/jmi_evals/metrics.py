@@ -51,7 +51,7 @@ class EvalReport:
     labels: list[str]
     #: Agreement between the LLM and the deterministic IND signal — a
     #: diagnostic, never a score. See :func:`signal_agreement`.
-    agreement: dict[str, float | int] = field(default_factory=dict)
+    agreement: dict[str, float | int | None] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -132,7 +132,7 @@ POSITIVE_STATUSES = frozenset({"explicit_yes", "likely_yes"})
 def signal_agreement(
     statuses: list[str],
     recognised_sponsor: list[bool],
-) -> dict[str, float | int]:
+) -> dict[str, float | int | None]:
     """How often the LLM's text read lines up with the IND register match.
 
     This is **not** an accuracy measure and a low number is not a bug. The two

@@ -33,7 +33,7 @@ jobs:
           uv run ruff format --check .
 
       - name: mypy
-        run: uv run mypy libs scrapers enrichment orchestration app
+        run: uv run mypy libs scrapers enrichment orchestration app evals
 
       - name: pytest
         run: uv run pytest --cov=jmi_core --cov=jmi_scrapers --cov=jmi_enrichment --cov-report=term-missing

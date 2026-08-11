@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status evals evals-sample evals-record evals-live app clean
+.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status evals evals-sample evals-label evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -19,7 +19,7 @@ lint: ## Lint (no changes)
 	uv run ruff format --check .
 
 type: ## Type-check
-	uv run mypy libs scrapers enrichment orchestration app
+	uv run mypy libs scrapers enrichment orchestration app evals
 
 test: ## Run the test suite
 	uv run pytest
@@ -76,6 +76,9 @@ dbt-status: ## Distil the last dbt run into docs/status/pipeline.json (app fresh
 
 evals-sample: ## Sample postings into the golden-set labelling template (SIZE=200)
 	uv run python -m jmi_evals.sample --size $(or $(SIZE),200)
+
+evals-label: ## Label the golden set by hand (keys 1-5; LIMIT=25 for a short sitting)
+	uv run python -m jmi_evals.label $(if $(LIMIT),--limit $(LIMIT),)
 
 evals-record: ## Harvest the model responses the pipeline already stored, for offline replay
 	uv run python -m jmi_evals.replay --record
