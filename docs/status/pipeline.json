@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-08-14T06:57:57+00:00",
-  "run_started_at": "2026-08-14T06:57:54.814291Z",
+  "generated_at": "2026-08-15T06:01:22+00:00",
+  "run_started_at": "2026-08-15T06:01:19.940573Z",
   "dbt_version": "1.11.11",
   "tests_total": 45,
   "tests_passed": 45,
   "models_total": 10,
   "models_passed": 10,
-  "elapsed_seconds": 11.5
+  "elapsed_seconds": 12.1
 }
