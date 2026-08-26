@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-25T06:05:02+00:00",
-  "run_started_at": "2026-08-25T06:04:59.305540Z",
+  "generated_at": "2026-08-26T06:07:37+00:00",
+  "run_started_at": "2026-08-26T06:07:34.413023Z",
   "dbt_version": "1.11.11",
   "tests_total": 45,
   "tests_passed": 45,
