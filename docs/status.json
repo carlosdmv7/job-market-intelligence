@@ -1,8 +1,8 @@
 {
   "project": "job-market-intelligence",
-  "generated_at": "2026-08-28T17:43:45+00:00",
-  "last_ingest_at": "2026-08-28T17:33:49+00:00",
-  "rows_in_warehouse": 9984,
+  "generated_at": "2026-08-29T11:55:08+00:00",
+  "last_ingest_at": "2026-08-29T11:46:06+00:00",
+  "rows_in_warehouse": 10150,
   "dbt_tests_passed": 45,
   "dbt_tests_total": 45,
   "last_run_conclusion": "success"
