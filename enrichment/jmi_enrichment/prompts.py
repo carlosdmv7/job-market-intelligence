@@ -16,10 +16,26 @@ from jmi_core.schema import (
     Seniority,
     VisaSponsorshipStatus,
 )
+from jmi_core.text import strip_html
 
-# Truncate very long descriptions to keep cost/latency predictable. The visa
-# signal is almost always in the first ~6k chars (intro + requirements).
+#: Truncate very long descriptions to keep cost and latency predictable.
+#:
+#: Counted in characters of *plain text*, not markup. Descriptions arrive as raw
+#: HTML — a typical 10k-character posting is about half tags, and one board sends
+#: `<p style="min-height:1.5em">` before every paragraph. Sending that spent
+#: roughly half the budget on markup and pushed the requirements block, where the
+#: tech stack actually lives, past the cut. Stripping first is what makes a
+#: truncation limit mean anything.
 MAX_DESCRIPTION_CHARS = 6000
+
+#: Batched requests truncate harder. Ten postings at the single-call budget is a
+#: 60k-character prompt, and a model given that much text starts losing track of
+#: which posting it is on — the failure the response indexing is designed to
+#: catch, but better avoided than caught. 3k characters of stripped text reaches
+#: well into the requirements block; 3k characters of HTML did not get past the
+#: company intro, which is why the first batched run returned no technologies at
+#: all.
+MAX_BATCH_DESCRIPTION_CHARS = 3000
 
 SYSTEM_PROMPT = """\
 You classify software/data job postings for a job-market intelligence tool.
@@ -67,11 +83,17 @@ When the text is genuinely silent on a field, use the unknown/null option and a
 low confidence rather than guessing."""
 
 
+def _readable(posting: dict[str, Any], budget: int) -> str:
+    """The posting's description as plain text, truncated to ``budget`` chars."""
+    description = strip_html(posting.get("description_raw")) or ""
+    if len(description) > budget:
+        return description[:budget] + " …[truncated]"
+    return description
+
+
 def build_user_prompt(posting: dict[str, Any]) -> str:
     """Render one posting (a warehouse row dict) into the user message."""
-    description = posting.get("description_raw") or ""
-    if len(description) > MAX_DESCRIPTION_CHARS:
-        description = description[:MAX_DESCRIPTION_CHARS] + " …[truncated]"
+    description = _readable(posting, MAX_DESCRIPTION_CHARS)
 
     lines = [
         f"Title: {posting.get('title') or '(none)'}",
@@ -91,14 +113,16 @@ def _vals(enum_cls: type[StrEnum]) -> str:
     return "|".join(e.value for e in enum_cls)
 
 
-def json_output_instructions() -> str:
-    """Exact JSON shape, appended to the user turn for JSON-mode providers.
+def classification_keys() -> str:
+    """The key-by-key shape of one classification object.
+
+    Split out from :func:`json_output_instructions` so a batched request can
+    quote the same field list without also repeating "respond with ONLY a JSON
+    object" in the middle of a different envelope's instructions.
 
     Enum value lists are generated from the schema so they never drift.
-    Anthropic's native structured output ignores this; it's harmless there.
     """
     return (
-        "Respond with ONLY a JSON object (no markdown, no commentary) with exactly these keys:\n"
         "normalized_role (string|null), role_family (string|null),\n"
         f"seniority (one of: {_vals(Seniority)}),\n"
         f"employment_type (one of: {_vals(EmploymentType)}),\n"
@@ -110,4 +134,52 @@ def json_output_instructions() -> str:
         "requires_local_language (boolean|null), working_languages (array of ISO 639-1 strings|null),\n"
         "english_sufficient (boolean|null), relocation_support (boolean|null),\n"
         "enrichment_confidence (number 0..1|null)"
+    )
+
+
+def json_output_instructions() -> str:
+    """Exact JSON shape for a single-posting request, appended to the user turn.
+
+    Anthropic's native structured output ignores this; it's harmless there.
+    """
+    return (
+        "Respond with ONLY a JSON object (no markdown, no commentary) with "
+        "exactly these keys:\n" + classification_keys()
+    )
+
+
+def build_batch_user_prompt(postings: list[dict[str, Any]]) -> str:
+    """Render several postings into one user message, explicitly numbered."""
+    blocks = []
+    for i, posting in enumerate(postings, start=1):
+        description = _readable(posting, MAX_BATCH_DESCRIPTION_CHARS)
+        blocks.append(
+            "\n".join(
+                [
+                    f"===== POSTING {i} =====",
+                    f"Title: {posting.get('title') or '(none)'}",
+                    f"Company: {posting.get('company_name') or '(unknown)'}",
+                    f"Location: {posting.get('location_raw') or '(unknown)'}",
+                    f"Country: {posting.get('country_code') or '(unknown)'}",
+                    f"Detected language: {posting.get('detected_language') or '(unknown)'}",
+                    f"Salary (raw): {posting.get('salary_raw') or '(none)'}",
+                    "",
+                    "Job description:",
+                    description or "(no description provided)",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
+def batch_json_output_instructions(count: int) -> str:
+    """JSON shape for a batched request: one indexed entry per posting."""
+    return (
+        f"There are {count} postings above, numbered 1 to {count}.\n"
+        "Respond with ONLY a JSON object (no markdown, no commentary):\n"
+        '{"results": [{"index": <the posting number>, "classification": {...}}, ...]}\n'
+        f"Return exactly {count} entries, one per posting, each with the index of the "
+        "posting it describes. Classify each posting independently — do not let one "
+        "posting's requirements leak into another's.\n\n"
+        "Each `classification` object has exactly these keys:\n" + classification_keys()
     )
