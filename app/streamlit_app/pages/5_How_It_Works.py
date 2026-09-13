@@ -26,6 +26,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _EVAL_REPORT = _REPO_ROOT / "evals" / "report.json"
 _GOLDEN_SET = _REPO_ROOT / "evals" / "golden_set.jsonl"
 
+#: Below this many scored postings, headline metrics are noise dressed as
+#: precision — macro-averaging over five classes needs support in each. An
+#: "Accuracy 100%" computed on a handful of rows is exactly the unmeasured
+#: confidence this page exists to avoid, so it is withheld instead.
+_MIN_SCORED = 30
+
 ui.configure_page("How It Works")
 ui.page_header(
     title="⚙️ How It Works",
@@ -188,7 +194,7 @@ def _golden_progress() -> tuple[int, int]:
 report = _eval_report()
 labelled, total = _golden_progress()
 
-if report:
+if report and report.get("n", 0) >= _MIN_SCORED:
     e1, e2, e3, e4 = st.columns(4)
     e1.metric("Accuracy", f"{report['accuracy']:.0%}", help=f"On {report['n']} scored postings.")
     e2.metric(
@@ -240,11 +246,14 @@ if report:
             help=f"Of {agreement.get('ind_positive', 0)} postings at recognised sponsors.",
         )
 elif total:
+    scored = report.get("n", 0) if report else 0
     st.info(
         f"**The harness is built and wired into CI; the labels are in progress** — "
-        f"{labelled} of {total} sampled postings labelled so far. Scores appear here "
-        "as soon as the golden set has labelled rows. Showing a number before then "
-        "would be exactly the unmeasured confidence this section exists to avoid."
+        f"{labelled} of {total} sampled postings labelled, {scored} of them scored "
+        f"so far (a label only scores once the pipeline has enriched that posting). "
+        f"Headline accuracy appears here at {_MIN_SCORED} scored postings: a "
+        "percentage computed on a handful of rows would be exactly the unmeasured "
+        "confidence this section exists to avoid."
     )
 else:
     st.info(

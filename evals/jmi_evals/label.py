@@ -31,7 +31,13 @@ import re
 from pathlib import Path
 
 from jmi_core.schema import VisaSponsorshipStatus
-from jmi_evals.dataset import GOLDEN_SET_PATH, GoldenRecord, load_golden_set, save_golden_set
+from jmi_evals.dataset import (
+    GOLDEN_SET_PATH,
+    GoldenRecord,
+    load_golden_set,
+    load_responses,
+    save_golden_set,
+)
 
 #: The enum, in rubric order (most positive → most negative), bound to 1-5.
 CHOICES: list[VisaSponsorshipStatus] = [
@@ -60,13 +66,32 @@ def signal_hits(text: str) -> list[str]:
     return sorted({m.group(0).lower() for m in _SIGNAL.finditer(text or "")})
 
 
-def triage_order(records: list[GoldenRecord]) -> list[GoldenRecord]:
-    """Unlabelled first, richest right-to-work vocabulary first within that.
+def triage_order(
+    records: list[GoldenRecord], *, scoreable: set[str] | None = None
+) -> list[GoldenRecord]:
+    """Unlabelled first; within those, the ones a label actually buys a score.
+
+    Two keys, in this order:
+
+    1. **Has a recorded model response.** Only postings the pipeline has already
+       enriched can be scored, and the enrichment is quota-bound — most of the
+       golden set has no response yet. Ordering by signal alone sent the first
+       sitting entirely into unenriched rows: nine labels, nothing scoreable.
+    2. **Richest right-to-work vocabulary**, as before — among equally scoreable
+       postings, the ones that actually discuss the right to work teach the eval
+       more than an ad that never mentions it.
 
     Stable on ties so a re-run resumes in the same order.
     """
     unlabelled = [r for r in records if not r.is_labelled]
-    return sorted(unlabelled, key=lambda r: -len(signal_hits(r.prompt_input)))
+    have_response = scoreable or set()
+    return sorted(
+        unlabelled,
+        key=lambda r: (
+            r.content_hash not in have_response,
+            -len(signal_hits(r.prompt_input)),
+        ),
+    )
 
 
 def highlight(text: str) -> str:
@@ -90,7 +115,14 @@ def _progress(records: list[GoldenRecord]) -> str:
     return f"{len(done)}/{len(records)} labelled   [{spread}]"
 
 
-def _render(rec: GoldenRecord, records: list[GoldenRecord], *, full: bool, show_pred: bool) -> None:
+def _render(
+    rec: GoldenRecord,
+    records: list[GoldenRecord],
+    *,
+    full: bool,
+    show_pred: bool,
+    scoreable: set[str],
+) -> None:
     print("\033[2J\033[H", end="")  # clear
     print(f"\033[1m{_progress(records)}\033[0m\n")
     print(f"\033[1m{rec.title or '(no title)'}\033[0m")
@@ -100,6 +132,11 @@ def _render(rec: GoldenRecord, records: list[GoldenRecord], *, full: bool, show_
         print(f"\033[2m{rec.source_url}\033[0m")
     hits = signal_hits(rec.prompt_input)
     print(f"\033[2mright-to-work terms: {', '.join(hits) if hits else 'none'}\033[0m")
+    # Whether labelling this one actually buys a score today.
+    if rec.content_hash in scoreable:
+        print("\033[2;32mscoreable now — the classifier has already read this one\033[0m")
+    else:
+        print("\033[2;33mnot scoreable yet — the pipeline has not enriched this one\033[0m")
     if show_pred:
         print(f"\033[2mproduction predicted: {rec.llm_status_at_sampling}\033[0m")
     print("\n" + "─" * 78)
@@ -127,7 +164,8 @@ def main() -> None:
     args = parser.parse_args()
 
     records = load_golden_set(args.path)
-    queue = triage_order(records)
+    scoreable = set(load_responses())
+    queue = triage_order(records, scoreable=scoreable)
     if not queue:
         print(f"nothing to label: all {len(records)} rows already have visa_status_true.")
         return
@@ -141,7 +179,13 @@ def main() -> None:
             if args.limit is not None and labelled_here >= args.limit:
                 break
             while True:
-                _render(rec, records, full=full, show_pred=args.show_prediction)
+                _render(
+                    rec,
+                    records,
+                    full=full,
+                    show_pred=args.show_prediction,
+                    scoreable=scoreable,
+                )
                 try:
                     key = input("> ").strip().lower()
                 except EOFError:
