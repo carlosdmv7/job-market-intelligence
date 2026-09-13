@@ -8,11 +8,11 @@
    (honeypot is registered but unverified — not counted, not run)
             │  jmi_scrapers → canonical JobPosting
             ▼
- Prefect-instrumented flows (orchestration/jmi_flows), run daily by
- GitHub Actions (.github/workflows/pipeline.yml)
+ Flows (orchestration/jmi_flows) carrying Prefect @flow decorators, run daily
+ by GitHub Actions (.github/workflows/pipeline.yml) — no hosted worker
    ingest  ──────────────►  raw.raw_job_postings   (append-only event log)
    enrich  ──── LLM ─────►  raw.raw_job_enrichment (1 row per content_hash)
-            │                         (Gemini free tier; Ollama/Anthropic optional)
+            │        (Gemini free tier: 20 requests/day/model, 10 postings each)
             ▼
  IND recognised-sponsor register (~12.8k employers) ─► dbt seed
             │
@@ -20,12 +20,13 @@
    staging.stg_*            cleaning + normalized sponsor register
    staging.int_*            cross-source dedup  (canonical_job_id)
    marts.FT_/DT_*           dimensional model + FT_JOB_SNAPSHOT_DAILY
-                            + deterministic is_recognised_sponsor/sponsor_kvk
+                            + is_target_role (data role?) and is_active (still
+                              on the board?) + is_recognised_sponsor/sponsor_kvk
             │
             ▼
- Streamlit app (app/streamlit_app)
-   6 pages: Job Explorer · Market Trends · NL Visa Audit ·
-            Ask the Data (text-to-SQL agent) · CV Match · How It Works
+ Streamlit app (app/streamlit_app), top nav, entry point Home.py
+   Overview · Find Jobs · My Fit (CV stack overlap) · Market Trends ·
+   Ask the Data (text-to-SQL agent) · How It Works · Visa sponsorship (NL)
 ```
 
 ## Layers & grain

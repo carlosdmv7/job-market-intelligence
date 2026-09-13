@@ -182,8 +182,10 @@ Grain table and full diagram: [docs/architecture.md](docs/architecture.md) ·
 [`pipeline.yml`](.github/workflows/pipeline.yml) executes
 `ingest → enrich → dbt build` every morning (07:15 Amsterdam). GitHub Actions
 is the deliberate 0€ substitute for an always-on orchestration worker; the
-flows are **Prefect-instrumented**, so every run — scheduled or manual —
-reports state and logs to Prefect Cloud.
+flows carry Prefect `@flow` decorators, so they *would* report state and logs to
+Prefect Cloud if `PREFECT_API_URL`/`PREFECT_API_KEY` were set. They are not set:
+a hosted worker is not 0€, so the decorators are structure, not a live
+deployment.
 [`prefect.yaml`](orchestration/prefect.yaml) documents the worker-based
 production path and why it is not deployed (it needs a paid always-on machine).
 
