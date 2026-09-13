@@ -44,7 +44,12 @@ totals = run_df(
         count(*) filter (where {LIVE})                                as live_roles,
         count(*) filter (where {TARGET})                              as all_roles,
         count(distinct company_name) filter (where {LIVE})             as companies,
-        count(distinct country_code) filter (where {LIVE})             as markets,
+        -- coalesce, not count(distinct country_code): postings with no country are
+        -- remote/global and the table below lists them as their own market row, so
+        -- counting only non-null codes made the metric disagree with the rows
+        -- immediately beside it.
+        count(distinct coalesce(country_code, 'REMOTE'))
+            filter (where {LIVE})                                      as markets,
         count(*) filter (where {LIVE} and len(technologies) > 0)        as with_stack
     from marts.FT_JOB_POSTING
     """
@@ -60,7 +65,11 @@ m1.metric(
     help="Still visible on their source board in the latest sweep.",
 )
 m2.metric("Companies hiring", f"{int(totals.companies):,}")
-m3.metric("Markets", f"{int(totals.markets)}")
+m3.metric(
+    "Markets",
+    f"{int(totals.markets)}",
+    help="Tracked countries plus one bucket for remote roles with no country.",
+)
 m4.metric(
     "Closed, kept for history",
     f"{closed:,}",

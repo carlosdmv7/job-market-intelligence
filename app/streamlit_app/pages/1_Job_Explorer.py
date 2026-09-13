@@ -1,4 +1,4 @@
-"""Job Explorer — filter every market, open any posting's full card.
+"""Find Jobs — filter every market, open any posting's full card.
 
 The card (ficha) is where the two visa signals become inspectable: the
 deterministic IND match (with its KvK number) and the LLM's read of the text
@@ -16,7 +16,7 @@ from streamlit_app.db import require_marts, run_df
 
 from jmi_core.text import strip_html
 
-ui.configure_page("Job Explorer")
+ui.configure_page("Find Jobs")
 ui.page_header(
     title="🔎 Find Jobs",
     subtitle=(

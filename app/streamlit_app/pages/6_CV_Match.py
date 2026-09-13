@@ -1,4 +1,4 @@
-"""CV Match — rank every enriched posting against your CV, then deep-dive one.
+"""My Fit — rank every open posting against your CV, then deep-dive one.
 
 Privacy: the CV lives in st.session_state only. It is never written to the
 warehouse, a file, or logs; closing the tab discards it. The only thing that
@@ -26,7 +26,7 @@ from jmi_core.settings import get_settings
 from jmi_core.text import strip_html
 from jmi_enrichment.providers import get_provider
 
-ui.configure_page("CV Match")
+ui.configure_page("My Fit")
 ui.page_header(
     title="🎯 My Fit",
     subtitle=(

@@ -1,4 +1,4 @@
-"""NL Visa Audit — the deterministic IND recognised-sponsor cross-reference.
+"""Visa sponsorship (Netherlands) — the deterministic IND cross-reference.
 
 This is the specialized Netherlands page: every company is checked against the
 official IND register of employers legally authorised to sponsor a

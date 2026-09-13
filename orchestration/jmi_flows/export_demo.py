@@ -1,7 +1,7 @@
 """Freeze a small, self-contained slice of the warehouse for demo mode.
 
 The app is the project's shop window, and until now cloning the repo and
-running it got you six pages of "can't reach the warehouse" unless you had a
+running it got you a wall of "can't reach the warehouse" unless you had a
 MotherDuck token. That is the wrong first impression for the one artefact a
 reader is most likely to try.
 
