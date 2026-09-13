@@ -9,6 +9,7 @@ Each ``_parse`` is pure and unit-tested; ``scrape`` handles paging.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -43,6 +44,55 @@ DATA_ROLE_QUERIES: tuple[str, ...] = (
     "data platform",
 )
 
+#: The same scope decision as DATA_ROLE_QUERIES, for the boards that have no
+#: server-side search. Adzuna and JobTech are asked for data roles; Remotive,
+#: Arbeitnow and RemoteOK hand back their whole board, so the filter has to
+#: happen here instead.
+#:
+#: Without it those three were 10,384 of the corpus's 12,584 postings, and
+#: roughly nine in ten were Steuerberater, hotel managers and sales executives
+#: — noise that drowned the data roles in every list the app renders.
+#:
+#: Matched against the *title* only. A description mentioning "data" in passing
+#: says nothing about the role; a title is the board's own summary of it.
+_TARGET_ROLE_TERMS: tuple[str, ...] = (
+    r"data",  # data engineer/analyst/scientist/platform/governance/ops
+    r"analytics?",
+    r"machine\s+learning",
+    r"ml\s*ops",
+    r"ml\s+engineer",
+    r"\bml\b",
+    r"ai\s+engineer",
+    r"\bai\b\s*/\s*ml",
+    r"business\s+intelligence",
+    r"\bbi\b",
+    r"\betl\b",
+    r"\bdbt\b",
+    r"data\s*warehouse",
+    r"datawarehouse",
+    r"big\s*data",
+    r"\bllm\b",
+)
+
+#: Every term is word-anchored on both sides. An early version anchored only the
+#: front and matched "BI" inside "Bildung" — which is the kind of bug that
+#: quietly re-admits the noise the filter exists to remove.
+TARGET_ROLE_PATTERN = re.compile(
+    "(?:" + "|".join(t if t.startswith(r"\b") else rf"\b{t}\b" for t in _TARGET_ROLE_TERMS) + ")",
+    re.IGNORECASE,
+)
+
+
+def is_target_role(title: str | None) -> bool:
+    """Is this title a data/analytics/ML role worth ingesting?"""
+    return bool(title and TARGET_ROLE_PATTERN.search(title))
+
+
+#: ``limit`` means "this many *relevant* postings", so a board where ~9 in 10
+#: are off-target has to be read further than it used to be. This caps how far:
+#: without it a thin day on the board would page until the API tired of us.
+MAX_RECORDS_SCANNED = 3000
+
 
 class RemotiveScraper(BaseScraper):
     """https://remotive.com/api/remote-jobs — remote tech jobs, no key."""
@@ -51,16 +101,22 @@ class RemotiveScraper(BaseScraper):
     API_URL = "https://remotive.com/api/remote-jobs"
 
     def scrape(self, limit: int) -> Iterator[JobPosting]:
-        data = self.http.get_json(self.API_URL, params={"limit": limit})
-        count = 0
+        # One call, so ask for enough rows that `limit` survives the role filter
+        # rather than returning a handful.
+        data = self.http.get_json(self.API_URL, params={"limit": MAX_RECORDS_SCANNED})
+        count = scanned = skipped = 0
         for record in data.get("jobs", []):
             if count >= limit:
                 break
+            scanned += 1
+            if not is_target_role(record.get("title")):
+                skipped += 1
+                continue
             posting = self._parse(record)
             if posting is not None:
                 count += 1
                 yield posting
-        log.info("remotive.scrape.done", count=count)
+        log.info("remotive.scrape.done", count=count, scanned=scanned, skipped_off_role=skipped)
 
     def _parse(self, record: dict[str, Any]) -> JobPosting | None:
         job_id, title, url = record.get("id"), record.get("title"), record.get("url")
@@ -89,18 +145,22 @@ class ArbeitnowScraper(BaseScraper):
 
     def scrape(self, limit: int) -> Iterator[JobPosting]:
         url: str | None = self.API_URL
-        count = 0
-        while url and count < limit:
+        count = scanned = skipped = 0
+        while url and count < limit and scanned < MAX_RECORDS_SCANNED:
             data = self.http.get_json(url)
             for record in data.get("data", []):
-                if count >= limit:
-                    return
+                if count >= limit or scanned >= MAX_RECORDS_SCANNED:
+                    break
+                scanned += 1
+                if not is_target_role(record.get("title")):
+                    skipped += 1
+                    continue
                 posting = self._parse(record)
                 if posting is not None:
                     count += 1
                     yield posting
             url = (data.get("links") or {}).get("next")
-        log.info("arbeitnow.scrape.done", count=count)
+        log.info("arbeitnow.scrape.done", count=count, scanned=scanned, skipped_off_role=skipped)
 
     def _parse(self, record: dict[str, Any]) -> JobPosting | None:
         slug, title, url = record.get("slug"), record.get("title"), record.get("url")
@@ -131,15 +191,19 @@ class RemoteOkScraper(BaseScraper):
         data = self.http.get_json(self.API_URL)
         # Element 0 is a legal/disclaimer object; real jobs have an "id".
         records = [r for r in data if isinstance(r, dict) and r.get("id")]
-        count = 0
+        count = scanned = skipped = 0
         for record in records:
             if count >= limit:
                 break
+            scanned += 1
+            if not is_target_role(record.get("position") or record.get("title")):
+                skipped += 1
+                continue
             posting = self._parse(record)
             if posting is not None:
                 count += 1
                 yield posting
-        log.info("remoteok.scrape.done", count=count)
+        log.info("remoteok.scrape.done", count=count, scanned=scanned, skipped_off_role=skipped)
 
     def _parse(self, record: dict[str, Any]) -> JobPosting | None:
         job_id = record.get("id")
