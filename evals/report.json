@@ -1,0 +1,94 @@
+{
+  "n": 1,
+  "accuracy": 1.0,
+  "macro_precision": 1.0,
+  "macro_recall": 1.0,
+  "macro_f1": 1.0,
+  "per_class": {
+    "explicit_yes": {
+      "support": 0,
+      "predicted": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "likely_yes": {
+      "support": 0,
+      "predicted": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "unclear": {
+      "support": 0,
+      "predicted": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "likely_no": {
+      "support": 0,
+      "predicted": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "explicit_no": {
+      "support": 1,
+      "predicted": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "confusion": {
+    "explicit_yes": {
+      "explicit_yes": 0,
+      "likely_yes": 0,
+      "unclear": 0,
+      "likely_no": 0,
+      "explicit_no": 0
+    },
+    "likely_yes": {
+      "explicit_yes": 0,
+      "likely_yes": 0,
+      "unclear": 0,
+      "likely_no": 0,
+      "explicit_no": 0
+    },
+    "unclear": {
+      "explicit_yes": 0,
+      "likely_yes": 0,
+      "unclear": 0,
+      "likely_no": 0,
+      "explicit_no": 0
+    },
+    "likely_no": {
+      "explicit_yes": 0,
+      "likely_yes": 0,
+      "unclear": 0,
+      "likely_no": 0,
+      "explicit_no": 0
+    },
+    "explicit_no": {
+      "explicit_yes": 0,
+      "likely_yes": 0,
+      "unclear": 0,
+      "likely_no": 0,
+      "explicit_no": 1
+    }
+  },
+  "agreement": {
+    "n": 1,
+    "llm_positive": 0,
+    "ind_positive": 0,
+    "both_positive": 0,
+    "raw_agreement": 1.0,
+    "llm_positive_confirmed_by_register": null,
+    "register_positive_stated_in_text": null
+  },
+  "provider": "replay",
+  "skipped": 8,
+  "golden_set_size": 200,
+  "generated_at": "2026-09-13T12:01:16+00:00"
+}

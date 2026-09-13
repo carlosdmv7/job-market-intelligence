@@ -10,6 +10,7 @@ from jmi_scrapers.free_apis import (
     JobTechScraper,
     RemoteOkScraper,
     RemotiveScraper,
+    is_target_role,
 )
 
 
@@ -219,3 +220,110 @@ def test_adzuna_scrape_requires_credentials():
     settings.adzuna_app_id = settings.adzuna_app_key = None
     with pytest.raises(RuntimeError, match="ADZUNA_APP_ID"):
         list(AdzunaScraper(settings, country="nl").scrape(10))
+
+
+# --- the data-role filter on the unsearchable boards -------------------------
+# Remotive, Arbeitnow and RemoteOK return their whole board, so the scope
+# decision that DATA_ROLE_QUERIES expresses for Adzuna/JobTech has to be
+# enforced here instead.
+
+
+class _FakeBoardHttp:
+    """Serves one page of records, whatever shape the caller asks for."""
+
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.calls: list[dict] = []
+
+    def get_json(self, url, *, params=None, headers=None):
+        self.calls.append({"url": url, "params": params})
+        return self.payload
+
+
+@pytest.mark.parametrize(
+    ("title", "kept"),
+    [
+        ("Senior Data Engineer", True),
+        ("Analytics Engineer", True),
+        ("Machine Learning Engineer", True),
+        ("Senior BI Developer", True),
+        ("AI Engineer (m/w/d)", True),
+        ("Data Scientist", True),
+        # An earlier pattern anchored only the front of each term and matched
+        # "BI" inside "Bildung", re-admitting exactly the noise it removes.
+        ("Werkstudent (m/w/d) Redaktion Bildung.Table", False),
+        ("Hotel Executive Assistant Manager", False),
+        ("Steuerberater (m/w/d)", False),
+        ("Senior Sales Executive", False),
+        ("Transactional Financial Controller", False),
+        (None, False),
+    ],
+)
+def test_is_target_role(title, kept):
+    assert is_target_role(title) is kept
+
+
+def test_remotive_scrape_drops_off_role_postings():
+    http = _FakeBoardHttp(
+        {
+            "jobs": [
+                {"id": 1, "url": "u1", "title": "Data Engineer"},
+                {"id": 2, "url": "u2", "title": "Hotel Manager"},
+                {"id": 3, "url": "u3", "title": "Analytics Engineer"},
+            ]
+        }
+    )
+    scraper = RemotiveScraper(_s())
+    scraper._http = http
+
+    titles = [p.title for p in scraper.scrape(10)]
+
+    assert titles == ["Data Engineer", "Analytics Engineer"]
+
+
+def test_remoteok_scrape_drops_off_role_postings():
+    http = _FakeBoardHttp(
+        [
+            {"id": 0, "legal": "disclaimer"},
+            {"id": 1, "url": "u1", "position": "Senior Data Analyst"},
+            {"id": 2, "url": "u2", "position": "Account Executive"},
+        ]
+    )
+    scraper = RemoteOkScraper(_s())
+    scraper._http = http
+
+    titles = [p.title for p in scraper.scrape(10)]
+
+    assert titles == ["Senior Data Analyst"]
+
+
+def test_arbeitnow_scrape_drops_off_role_postings():
+    http = _FakeBoardHttp(
+        {
+            "data": [
+                {"slug": "a", "url": "u1", "title": "Data Platform Engineer"},
+                {"slug": "b", "url": "u2", "title": "Steuerberater (m/w/d)"},
+            ],
+            "links": {"next": None},
+        }
+    )
+    scraper = ArbeitnowScraper(_s())
+    scraper._http = http
+
+    titles = [p.title for p in scraper.scrape(10)]
+
+    assert titles == ["Data Platform Engineer"]
+
+
+def test_limit_counts_relevant_postings_not_records_scanned():
+    # The point of the filter is that `limit` still means "this many usable
+    # postings", so a board that is mostly noise must be read further.
+    jobs = [{"id": i, "url": f"u{i}", "title": "Sales Executive"} for i in range(50)]
+    jobs += [{"id": 100 + i, "url": f"v{i}", "title": "Data Engineer"} for i in range(3)]
+    scraper = RemotiveScraper(_s())
+    scraper._http = _FakeBoardHttp({"jobs": jobs})
+
+    postings = list(scraper.scrape(3))
+
+    assert len(postings) == 3
+    assert all(p.title == "Data Engineer" for p in postings)

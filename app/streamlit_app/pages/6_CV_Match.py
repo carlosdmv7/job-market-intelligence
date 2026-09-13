@@ -97,7 +97,8 @@ jobs = run_df(
         content_hash, title, company_name, country_code, seniority, salary_raw,
         source, source_url, english_sufficient, technologies, last_seen_at
     from marts.FT_JOB_POSTING
-    where is_enriched and len(technologies) > 0
+    -- Data roles only: this ranks postings you would actually apply to.
+    where is_enriched and is_target_role and len(technologies) > 0
     """
 )
 ranked = score_jobs(jobs, skills)

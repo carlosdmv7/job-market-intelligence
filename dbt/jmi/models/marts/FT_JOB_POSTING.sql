@@ -69,7 +69,12 @@ select
     -- killer feature: deterministic IND recognised-sponsor cross-reference
     -- (the company is legally authorised to sponsor a NL work visa)
     (s.company_norm is not null)                                  as is_recognised_sponsor,
-    s.kvk_number                                                  as sponsor_kvk
+    s.kvk_number                                                  as sponsor_kvk,
+
+    -- Is this a data/analytics/ML role? A flag, not a filter: the row stays
+    -- queryable so trends over the whole corpus remain answerable, and the app
+    -- decides where relevance matters (browsing) and where it does not (history).
+    {{ jmi_is_target_role('p.title') }}                            as is_target_role
 from postings p
 left join enrichment e on p.content_hash = e.content_hash
 left join sponsors s on {{ jmi_normalize_company('p.company_name') }} = s.company_norm

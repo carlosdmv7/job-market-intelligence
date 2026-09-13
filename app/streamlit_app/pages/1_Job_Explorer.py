@@ -58,11 +58,21 @@ ORDERINGS = {
     "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
 }
 
-g1, g2, g3, g4 = st.columns(4, gap="medium")
-sponsor_only = g1.toggle("IND sponsor only", help="Company on the Dutch IND register.")
-english_only = g2.toggle("English is sufficient", help="Per the LLM read of the text.")
-visa_signal = g3.toggle("Visa signal in text", help="LLM read: explicit_yes or likely_yes.")
-enriched_only = g4.toggle("LLM-enriched only")
+g1, g2, g3, g4, g5 = st.columns(5, gap="medium")
+data_roles_only = g1.toggle(
+    "Data roles only",
+    value=True,
+    help=(
+        "Data / analytics / ML titles. On by default: the free boards publish "
+        "their whole catalogue, so most of what was ingested before the role "
+        "filter existed is sales, finance and hospitality. Turn it off to see "
+        "the raw corpus — nothing is deleted, only hidden."
+    ),
+)
+sponsor_only = g2.toggle("IND sponsor only", help="Company on the Dutch IND register.")
+english_only = g3.toggle("English is sufficient", help="Per the LLM read of the text.")
+visa_signal = g4.toggle("Visa signal in text", help="LLM read: explicit_yes or likely_yes.")
+enriched_only = g5.toggle("LLM-enriched only")
 
 clauses: list[str] = []
 params: list = []
@@ -82,6 +92,8 @@ if search:
 for tech in picked_techs:
     clauses.append("list_contains(technologies, ?)")
     params.append(tech)
+if data_roles_only:
+    clauses.append("is_target_role")
 if sponsor_only:
     clauses.append("is_recognised_sponsor")
 if english_only:

@@ -44,6 +44,33 @@ def test_triage_puts_the_richest_signal_first():
     assert [r.content_hash for r in queue] == ["b", "c", "a"]
 
 
+def test_triage_puts_scoreable_postings_before_richer_unscoreable_ones():
+    # The first real labelling session produced nine labels and nothing
+    # scoreable: ordering by signal alone walked straight into postings the
+    # pipeline had never enriched. A label on an unenriched posting buys no
+    # score until the quota reaches it, so "can be scored today" outranks
+    # "discusses visas the most".
+    queue = triage_order(
+        [
+            _rec("visa sponsorship relocation work permit", content_hash="rich_no_response"),
+            _rec("we mention a visa once", content_hash="poor_with_response"),
+        ],
+        scoreable={"poor_with_response"},
+    )
+    assert [r.content_hash for r in queue] == ["poor_with_response", "rich_no_response"]
+
+
+def test_triage_still_ranks_by_signal_within_the_scoreable_group():
+    queue = triage_order(
+        [
+            _rec("nothing relevant here", content_hash="a"),
+            _rec("visa sponsorship and relocation", content_hash="b"),
+        ],
+        scoreable={"a", "b"},
+    )
+    assert [r.content_hash for r in queue] == ["b", "a"]
+
+
 def test_triage_skips_rows_that_already_have_a_label():
     queue = triage_order(
         [
