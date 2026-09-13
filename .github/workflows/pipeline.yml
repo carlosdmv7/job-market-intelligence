@@ -1,8 +1,10 @@
 name: Daily pipeline
 
 # The 0-cost scheduler: GitHub Actions runs the same Make-driven pipeline a
-# Prefect worker would, and every flow run is still tracked in Prefect Cloud
-# (the @flow wrappers report there via PREFECT_API_KEY/URL when configured).
+# Prefect worker would. The flows carry @flow decorators and WILL report to
+# Prefect Cloud if PREFECT_API_URL/KEY are set as repo secrets — they are
+# not, so today nothing is tracked there and this workflow's own run log is
+# the record.
 #
 # Daily cadence is what feeds marts.FT_JOB_SNAPSHOT_DAILY — the Market Trends
 # "over time" charts only accumulate history if this actually runs every day.
@@ -16,9 +18,10 @@ concurrency:
   group: daily-pipeline
   cancel-in-progress: false # never kill a half-finished warehouse write
 
-# The run needs to push docs/status/pipeline.json back to main.
+# Nothing is written back to the repo: the run summary goes to the
+# warehouse (meta.pipeline_run), not to a committed file.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   pipeline:
@@ -86,47 +89,13 @@ jobs:
           uv run dbt deps
           uv run dbt build
 
-      # target/ is gitignored, so the deployed app can never read run_results.json
-      # directly. Distil it to a small committed file instead — that is where the
-      # app's freshness header gets "dbt tests passing", and the git history of
-      # this one file doubles as a record of when the warehouse last built clean.
-      - name: Record the run status
-        if: always()
-        run: uv run python -m jmi_flows.dbt_status
-
-      - name: Commit the run status
-        if: always()
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/status/pipeline.json
-          # Nothing to do when the numbers are unchanged — a daily empty commit
-          # would bury the history this file exists to provide.
-          if git diff --cached --quiet; then
-            echo "status unchanged"
-          else
-            git commit -m "Daily pipeline: record dbt run status [skip ci]"
-            git push
-          fi
-
-      # The public one-file summary: warehouse size, last ingest, dbt tests, and
-      # how this run ended. Runs on failed days too — a status file that only
-      # appears when the pipeline is green cannot tell you it stopped.
-      - name: publish status
+      # The run summary goes to meta.pipeline_run in the warehouse, next to
+      # every other number the app shows. It used to be distilled into a
+      # committed JSON file, which meant pushing two commits to main every
+      # single day — 58 of them in the first month, burying the human history.
+      # if: always() so a run that died mid-ingest is recorded as having died.
+      - name: Record the run in the warehouse
         if: always()
         env:
           JMI_RUN_CONCLUSION: ${{ job.status }}
-        run: |
-          uv run python -m jmi_flows.publish_status
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/status.json
-          if git diff --cached --quiet; then
-            echo "status unchanged"
-          else
-            git commit -m "Daily pipeline: publish status.json [skip ci]"
-            # The step above may have pushed already; rebase onto whatever is
-            # on main now rather than racing it.
-            git pull --rebase --autostash
-            git push
-          fi
+        run: uv run python -m jmi_flows.dbt_status

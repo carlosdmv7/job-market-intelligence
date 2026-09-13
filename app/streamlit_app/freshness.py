@@ -4,8 +4,8 @@ Each fact is sourced from the thing it describes:
 
 * postings / coverage / last run  → the marts themselves;
 * recognised sponsors             → the dbt seed and its committed meta sidecar;
-* dbt tests                       → ``run_results.json``, distilled into
-  ``docs/status/pipeline.json`` by the daily pipeline.
+* dbt tests                       → ``meta.pipeline_run``, one row appended
+  by the daily pipeline (``run_results.json`` locally).
 
 If a source is unavailable the fact says so ("unknown") rather than quietly
 disappearing or being replaced by a plausible constant — a freshness header
@@ -28,10 +28,8 @@ from streamlit_app.theme import Fact, Tone
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SEED_META = _REPO_ROOT / "dbt" / "jmi" / "seeds" / "recognised_sponsors.meta.json"
 _SEED_CSV = _REPO_ROOT / "dbt" / "jmi" / "seeds" / "recognised_sponsors.csv"
-# Local dev has the real dbt artifact; the deployed app only has the committed
-# distillation of it (target/ is gitignored). Try both, in that order.
+# Local dev has the real dbt artifact; the deployed app reads meta.pipeline_run.
 _RUN_RESULTS = _REPO_ROOT / "dbt" / "jmi" / "target" / "run_results.json"
-_STATUS_FILE = _REPO_ROOT / "docs" / "status" / "pipeline.json"
 
 
 def _age(ts: Any) -> tuple[str, Tone]:
@@ -88,6 +86,13 @@ def _seed_facts() -> dict[str, Any]:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _dbt_facts() -> dict[str, Any]:
+    """The last recorded pipeline run.
+
+    Local dev has the real dbt artifact; a deployed app has only the warehouse,
+    where the pipeline appends one row per run (see `jmi_flows.dbt_status`).
+    Reading it from there is what lets the pipeline stop committing a status
+    file to `main` every single day.
+    """
     from importlib import import_module
 
     if _RUN_RESULTS.exists():
@@ -96,12 +101,20 @@ def _dbt_facts() -> dict[str, Any]:
             return summarize(json.loads(_RUN_RESULTS.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError, ImportError, KeyError):
             pass
-    if _STATUS_FILE.exists():
-        try:
-            return json.loads(_STATUS_FILE.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            pass
-    return {}
+    try:
+        df = run_df(
+            """
+            select tests_total, tests_passed, models_total, models_passed,
+                   dbt_version, recorded_at, conclusion
+            from meta.pipeline_run
+            where tests_total is not null
+            order by recorded_at desc
+            limit 1
+            """
+        )
+    except Exception:
+        return {}
+    return {} if df.empty else df.iloc[0].to_dict()
 
 
 def header_facts() -> list[Fact]:
@@ -164,7 +177,7 @@ def header_facts() -> list[Fact]:
                 "dbt tests passing",
                 f"{passed}/{total}",
                 "good" if passed == total else "bad",
-                help="From the last `dbt build`'s `run_results.json` — not a hardcoded count.",
+                help="From the last recorded `dbt build` — not a hardcoded count.",
             )
         )
     else:

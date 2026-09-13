@@ -344,6 +344,24 @@ def page_header(*, title: str, subtitle: str | None = None, freshness: bool = Tr
 
     facts = freshness_mod.header_facts() if freshness else ()
     render_header(title=title, subtitle=subtitle, facts=facts)
+    demo_notice()
+
+
+def demo_notice() -> None:
+    """Say so, on every page, when the data is the committed sample.
+
+    Not a footnote: a dashboard that presents a frozen sample as if it were
+    live is the precise dishonesty this project exists to avoid.
+    """
+    from streamlit_app.db import is_demo
+
+    if is_demo():
+        st.info(
+            "**Demo mode** — no warehouse configured, so this is a committed sample "
+            "of 2,000 postings frozen at export time, not live data. The full app "
+            "reads ~12,500 postings from MotherDuck, refreshed daily.",
+            icon="📦",
+        )
 
 
 def page_footer() -> None:
@@ -352,7 +370,8 @@ def page_footer() -> None:
     render_footer(
         repo_url=REPO_URL,
         note=(
-            "Every figure on this page is queried from the MotherDuck marts at page load. "
+            "Every figure on this page is queried at page load — from the MotherDuck "
+            "marts, or from the committed sample when running without credentials. "
             "Nothing here is hardcoded."
         ),
     )

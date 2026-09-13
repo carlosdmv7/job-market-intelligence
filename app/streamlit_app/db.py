@@ -1,28 +1,102 @@
-"""Cached warehouse access for the Streamlit app (read-only)."""
+"""Cached warehouse access for the Streamlit app (read-only).
+
+Two modes, and the app always says which one it is in:
+
+* **live** — MotherDuck, the real warehouse the pipeline writes to;
+* **demo** — a committed parquet sample (``app/demo/``), used when no
+  warehouse is reachable, so a fresh clone runs with no secrets and no
+  network.
+
+Demo mode is a fallback, never a silent substitute. A dashboard that shows a
+frozen sample as if it were live data is the exact failure this project argues
+against everywhere else, so :func:`is_demo` is surfaced in the UI.
+"""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import duckdb
 import pandas as pd
 import streamlit as st
 
 from jmi_core.settings import get_settings
 from jmi_core.warehouse import Warehouse
 
+DEMO_DIR = Path(__file__).resolve().parent.parent / "demo"
+
+#: parquet file (without extension) -> the qualified name the app queries.
+_DEMO_TABLES = {
+    "FT_JOB_POSTING": "marts.FT_JOB_POSTING",
+    "DT_COMPANY": "marts.DT_COMPANY",
+    "DT_SOURCE": "marts.DT_SOURCE",
+    "DT_DATE": "marts.DT_DATE",
+    "FT_JOB_SNAPSHOT_DAILY": "marts.FT_JOB_SNAPSHOT_DAILY",
+    "pipeline_run": "meta.pipeline_run",
+}
+
+
+def demo_available() -> bool:
+    return DEMO_DIR.is_dir() and (DEMO_DIR / "FT_JOB_POSTING.parquet").exists()
+
 
 @st.cache_resource
-def get_warehouse() -> Warehouse:
+def _demo_connection() -> duckdb.DuckDBPyConnection:
+    """In-memory DuckDB with views over the committed parquet sample.
+
+    Views, not tables: the parquet stays on disk and nothing is copied into
+    memory until a query actually touches it.
+    """
+    conn = duckdb.connect(":memory:")
+    for schema in ("marts", "meta"):
+        conn.execute(f"create schema if not exists {schema}")
+    for stem, qualified in _DEMO_TABLES.items():
+        path = DEMO_DIR / f"{stem}.parquet"
+        if path.exists():
+            conn.execute(
+                f"create or replace view {qualified} as select * from read_parquet('{path}')"
+            )
+    return conn
+
+
+@st.cache_resource
+def _live_connection() -> duckdb.DuckDBPyConnection | None:
+    """The real warehouse, or ``None`` when it cannot be reached at all."""
     s = get_settings()
-    try:
-        return Warehouse(s.duckdb_database, read_only=True, motherduck_token=s.motherduck_token)
-    except Exception:
-        # Some MotherDuck setups dislike read_only; fall back to a normal conn.
-        return Warehouse(s.duckdb_database, motherduck_token=s.motherduck_token)
+    for read_only in (True, False):  # some MotherDuck setups dislike read_only
+        try:
+            wh = Warehouse(
+                s.duckdb_database, read_only=read_only, motherduck_token=s.motherduck_token
+            )
+            # Connecting can succeed lazily; force a real round trip so a bad
+            # token fails here rather than on the first page that queries.
+            wh.conn.execute("select 1")
+            return wh.conn
+        except Exception:
+            continue
+    return None
+
+
+def is_demo() -> bool:
+    """True when the app is serving the committed sample instead of the warehouse."""
+    return _live_connection() is None and demo_available()
+
+
+def _connection() -> duckdb.DuckDBPyConnection:
+    live = _live_connection()
+    if live is not None:
+        return live
+    if demo_available():
+        return _demo_connection()
+    raise WarehouseUnreachable(
+        "no warehouse and no demo sample: set motherduck_token, or run "
+        "`uv run python -m jmi_flows.export_demo`"
+    )
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def run_df(sql: str, params: tuple | None = None) -> pd.DataFrame:
-    wh = get_warehouse()
-    return wh.conn.execute(sql, list(params) if params else None).df()
+    return _connection().execute(sql, list(params) if params else None).df()
 
 
 class WarehouseUnreachable(RuntimeError):
