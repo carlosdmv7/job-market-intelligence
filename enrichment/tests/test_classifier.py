@@ -72,14 +72,21 @@ def test_classify_builds_full_enrichment():
 
 
 def test_classify_many_skips_failures():
-    clf = JobClassifier(Settings(), provider=FakeProvider(raise_error=True))
+    clf = JobClassifier(
+        Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=1),
+        provider=FakeProvider(raise_error=True),
+    )
     assert list(clf.classify_many([POSTING, POSTING])) == []
 
 
 def test_classify_many_opens_circuit_on_consecutive_failures():
-    """An exhausted quota must not burn a retry cycle per remaining posting."""
+    """An exhausted quota must not burn a retry cycle per remaining posting.
+
+    Pinned to one posting per request: this asserts the failure *count*, and
+    batching would otherwise change how many postings each failure represents.
+    """
     provider = FakeProvider(raise_error=True)
-    clf = JobClassifier(Settings(), provider=provider)
+    clf = JobClassifier(Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=1), provider=provider)
     batch = [POSTING] * (JobClassifier.MAX_CONSECUTIVE_FAILURES * 3)
 
     assert list(clf.classify_many(batch)) == []
@@ -97,7 +104,137 @@ def test_classify_many_success_resets_the_circuit():
             return self._result, LLMUsage(input_tokens=1, output_tokens=1, cost_usd=0.0)
 
     provider = FlakyProvider()
-    clf = JobClassifier(Settings(), provider=provider)
+    clf = JobClassifier(Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=1), provider=provider)
     out = list(clf.classify_many([POSTING] * 12))
     assert len(out) == 6  # every other call succeeds; the circuit never opens
     assert len(provider.calls) == 12
+
+
+# --- batched requests -------------------------------------------------------
+def _posting(n: int) -> dict:
+    return POSTING | {
+        "content_hash": f"hash{n}",
+        "source_job_id": f"r-{n}",
+        "title": f"Data Engineer {n}",
+    }
+
+
+class FakeBatchProvider:
+    """Returns a caller-supplied batch payload, recording every request."""
+
+    model = "gemini-2.5-flash-lite"
+
+    def __init__(self, payload, *, usage=None):
+        self._payload = payload
+        self._usage = usage or LLMUsage(input_tokens=3000, output_tokens=1200, cost_usd=0.02)
+        self.calls: list[dict] = []
+
+    def classify(self, *, system, user, schema):
+        self.calls.append({"system": system, "user": user, "schema": schema})
+        return schema.model_validate(self._payload), self._usage
+
+
+def _batch(*indices: int) -> dict:
+    return {
+        "results": [
+            {"index": i, "classification": _classification().model_dump(mode="json")}
+            for i in indices
+        ]
+    }
+
+
+def test_a_batch_costs_one_request_and_returns_every_posting():
+    provider = FakeBatchProvider(_batch(1, 2, 3))
+    clf = JobClassifier(Settings(), provider=provider)
+
+    results = clf.classify_batch([_posting(1), _posting(2), _posting(3)])
+
+    assert len(provider.calls) == 1, "the whole point is one request for the whole batch"
+    assert [e.content_hash for e in results] == ["hash1", "hash2", "hash3"]
+
+
+def test_results_are_matched_by_index_not_by_position():
+    # The silent-corruption case: a model that answers out of order would, under
+    # positional matching, attach every classification to the wrong posting.
+    provider = FakeBatchProvider(_batch(3, 1, 2))
+    clf = JobClassifier(Settings(), provider=provider)
+
+    results = clf.classify_batch([_posting(1), _posting(2), _posting(3)])
+
+    assert [e.content_hash for e in results] == ["hash3", "hash1", "hash2"]
+
+
+def test_a_dropped_posting_leaves_the_others_correct():
+    provider = FakeBatchProvider(_batch(1, 3))
+    clf = JobClassifier(Settings(), provider=provider)
+
+    results = clf.classify_batch([_posting(1), _posting(2), _posting(3)])
+
+    # Posting 2 is simply not returned — it stays pending rather than being
+    # guessed or silently given posting 3's classification.
+    assert [e.content_hash for e in results] == ["hash1", "hash3"]
+
+
+def test_out_of_range_and_duplicate_indices_are_discarded():
+    provider = FakeBatchProvider(_batch(1, 1, 9))
+    clf = JobClassifier(Settings(), provider=provider)
+
+    results = clf.classify_batch([_posting(1), _posting(2)])
+
+    assert [e.content_hash for e in results] == ["hash1"]
+
+
+def test_usage_is_divided_across_the_batch_so_totals_stay_additive():
+    provider = FakeBatchProvider(
+        _batch(1, 2, 3, 4), usage=LLMUsage(input_tokens=4000, output_tokens=800, cost_usd=0.04)
+    )
+    clf = JobClassifier(Settings(), provider=provider)
+
+    results = clf.classify_batch([_posting(i) for i in (1, 2, 3, 4)])
+
+    assert [e.input_tokens for e in results] == [1000, 1000, 1000, 1000]
+    assert sum(e.cost_usd for e in results) == 0.04
+
+
+def test_classify_many_groups_postings_into_whole_requests():
+    provider = FakeBatchProvider(_batch(1, 2))
+    settings = Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=2)
+    clf = JobClassifier(settings, provider=provider)
+
+    results = list(clf.classify_many([_posting(i) for i in (1, 2, 3, 4)]))
+
+    assert len(provider.calls) == 2, "four postings, two per request"
+    assert len(results) == 4
+
+
+def test_one_per_request_keeps_the_single_posting_path():
+    provider = FakeProvider()
+    settings = Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=1)
+    clf = JobClassifier(settings, provider=provider)
+
+    results = list(clf.classify_many([_posting(1), _posting(2)]))
+
+    assert len(results) == 2
+    assert provider.calls[0]["schema"] is LLMJobClassification, "not the batch envelope"
+
+
+def test_a_failing_batch_counts_as_one_failure_not_ten():
+    # The circuit breaker guards against a provider that stopped answering, which
+    # is a property of the request. Counting each posting in a failed batch would
+    # trip it on the first group and abandon the run.
+    class Failing:
+        model = "m"
+
+        def __init__(self):
+            self.calls = 0
+
+        def classify(self, *, system, user, schema):
+            self.calls += 1
+            raise ClassificationError("quota exhausted")
+
+    provider = Failing()
+    settings = Settings(JMI_ENRICHMENT_POSTINGS_PER_REQUEST=2)
+    clf = JobClassifier(settings, provider=provider)
+
+    assert list(clf.classify_many([_posting(i) for i in range(1, 21)])) == []
+    assert provider.calls == JobClassifier.MAX_CONSECUTIVE_FAILURES

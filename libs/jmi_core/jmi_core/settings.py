@@ -57,9 +57,17 @@ class Settings(BaseSettings):
     # "5m" keeps it warm across a batch, "-1" never unloads.
     ollama_keep_alive: str = Field(default="5m", validation_alias="JMI_OLLAMA_KEEP_ALIVE")
     enrichment_prompt_version: str = Field(
-        default="enrich/v1", validation_alias="JMI_ENRICHMENT_PROMPT_VERSION"
+        default="enrich/v2", validation_alias="JMI_ENRICHMENT_PROMPT_VERSION"
     )
     enrichment_batch_size: int = Field(default=50, validation_alias="JMI_ENRICHMENT_BATCH_SIZE")
+
+    #: How many postings travel in a single LLM request. The free-tier quota is
+    #: counted in requests (a measured 20/day/model), not tokens, so this is the
+    #: multiplier on daily coverage: 1 means 20 postings/day, 10 means 200. Set
+    #: it to 1 to go back to one posting per call.
+    enrichment_postings_per_request: int = Field(
+        default=10, ge=1, validation_alias="JMI_ENRICHMENT_POSTINGS_PER_REQUEST"
+    )
 
     # --- scraping --------------------------------------------------------
     scrape_max_postings: int = Field(default=200, validation_alias="JMI_SCRAPE_MAX_POSTINGS")
