@@ -73,6 +73,9 @@ models:
         data_tests: [not_null, unique]
       - name: date_key
         data_tests: [not_null]
+      - name: is_target_role
+        description: Data/analytics/ML role, by the same title test as FT_JOB_POSTING.
+        data_tests: [not_null]
 
   - name: DT_COMPANY
     description: Company dimension (company_name + country grain).
