@@ -100,6 +100,9 @@ data_roles_only = f4.toggle(
 )
 
 clauses = ["(country_code = 'NL'" + (" or is_recognised_sponsor)" if include_remote else ")")]
+# Showcase page, so it carries fewer controls than Find Jobs: the postings list
+# is always live-only, while the sponsor rates above stay corpus-wide.
+clauses.append("is_active")
 params: list = []
 if data_roles_only:
     clauses.append("is_target_role")
@@ -155,7 +158,8 @@ if not sponsor_rows.empty:
 # --- the grid: select a row to open its evidence ---------------------------
 st.markdown("##### Postings")
 st.caption(
-    "Select a row to see exactly why it is flagged. Sorted: recognised sponsors first, then most recent."
+    "Open roles only. Select a row to see exactly why it is flagged — "
+    "recognised sponsors first, then most recently seen."
 )
 
 grid = ui.add_salary_eur(df)
@@ -227,9 +231,10 @@ with ev2:
     if not row["is_enriched"]:
         st.warning("**Not yet classified.** The classifier has not read this posting.")
         st.caption(
-            "Enrichment is capped by the free Gemini quota (~50 postings/day) and "
-            "accumulates daily, NL first. This is an absence of evidence, not evidence "
-            "of absence — do not read it as 'no sponsorship'."
+            "Enrichment is capped by the Gemini free tier at 20 requests/day/model — a "
+            "measured limit, not an estimate — so coverage accumulates slowly. This is "
+            "an absence of evidence, not evidence of absence: do not read it as "
+            "'no sponsorship'."
         )
     else:
         st.markdown(f"**{ui.visa_label(row['visa_status'], is_enriched=True)}**")

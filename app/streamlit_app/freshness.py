@@ -146,7 +146,8 @@ def header_facts() -> list[Fact]:
                 "warn" if wh["coverage"] < 0.5 else "good",
                 help=(
                     "Share of postings the classifier has read. Coverage is capped by "
-                    "the free Gemini quota (~50/day) and accumulates, NL first. The "
+                    "the Gemini free tier (a measured 20 requests/day/model) and "
+                    "accumulates, data roles first. The "
                     "remaining postings are **not yet classified** — that is not the "
                     "same as 'no sponsorship'."
                 ),

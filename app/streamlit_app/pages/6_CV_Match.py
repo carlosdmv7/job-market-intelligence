@@ -97,17 +97,17 @@ jobs = run_df(
         content_hash, title, company_name, country_code, seniority, salary_raw,
         source, source_url, english_sufficient, technologies, last_seen_at
     from marts.FT_JOB_POSTING
-    -- Data roles only: this ranks postings you would actually apply to.
-    where is_enriched and is_target_role and len(technologies) > 0
+    -- Open data roles only: ranking a filled posting wastes the reader's time.
+    where is_enriched and is_target_role and is_active and len(technologies) > 0
     """
 )
 ranked = score_jobs(jobs, skills)
 ranked["market"] = ranked["country_code"].map(ui.market_label)
 
-st.markdown(f"##### Ranked matches — {len(ranked):,} postings with extracted technologies")
+st.markdown(f"##### Ranked matches — {len(ranked):,} open roles with a parsed stack")
 st.caption(
-    "Score = share of the posting's technologies your CV covers. Only enriched postings "
-    "are rankable; coverage grows daily as the pipeline enriches more."
+    "Score = share of the posting's technologies your CV covers. Only roles the LLM has "
+    "read are rankable, and only ones still open are listed."
 )
 
 event = st.dataframe(
