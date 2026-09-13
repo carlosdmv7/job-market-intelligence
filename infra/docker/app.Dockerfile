@@ -15,5 +15,5 @@ RUN uv sync --package jmi-app --no-dev
 
 EXPOSE 8501
 
-CMD ["uv", "run", "streamlit", "run", "app/streamlit_app/Home.py", \
+CMD ["uv", "run", "streamlit", "run", "app/streamlit_app/app.py", \
      "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
