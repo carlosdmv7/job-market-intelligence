@@ -38,6 +38,10 @@ open_only = st.toggle(
     ),
 )
 SCOPE = "is_target_role and is_active" if open_only else "true"
+# The axis label has to follow the toggle. With it off these are every posting
+# ever collected, and calling those "open roles" would be a false label on a
+# real number — the exact failure this app is built to avoid.
+UNIT = "open roles" if open_only else "all postings"
 
 # --- 1 · which country -----------------------------------------------------
 st.markdown("#### Where the roles are")
@@ -62,13 +66,13 @@ by_country["english_share"] = (by_country["english_ok"] / by_country["llm_read"]
 
 c1, c2 = st.columns([3, 2], gap="large")
 with c1:
-    ui.show(ui.hbar(by_country, "market", "open_roles", value_title="open roles"))
+    ui.show(ui.hbar(by_country, "market", "open_roles", value_title=UNIT))
 with c2:
     ui.table(
         by_country[["market", "open_roles", "companies", "english_share"]],
         column_config={
             "market": st.column_config.TextColumn("Market"),
-            "open_roles": st.column_config.NumberColumn("Roles"),
+            "open_roles": st.column_config.NumberColumn("Roles", help=f"Counting {UNIT}."),
             "companies": st.column_config.NumberColumn("Companies"),
             "english_share": st.column_config.ProgressColumn(
                 "English is enough",
@@ -87,7 +91,7 @@ with c2:
 top = by_country.iloc[0] if not by_country.empty else None
 if top is not None:
     st.caption(
-        f"**{top['market']} leads on volume** with {int(top['open_roles']):,} open roles. "
+        f"**{top['market']} leads on volume** with {int(top['open_roles']):,} {UNIT}. "
         "Volume and language are different questions though — compare the "
         "*English is enough* column before reading a big number as an opportunity."
     )
@@ -114,7 +118,7 @@ if stacks.empty:
 else:
     s1, s2 = st.columns([2, 3], gap="large")
     with s1:
-        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title="open roles"))
+        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title=UNIT))
     with s2:
         # Six series is the most a shared colour legend stays readable with.
         leaders = stacks.head(6)["tech"].tolist()
@@ -240,6 +244,7 @@ st.divider()
 
 # --- 4 · who -------------------------------------------------------------
 st.markdown("#### Who is hiring most")
+st.caption(f"By number of {UNIT}.")
 companies = run_df(
     f"""
     select company_name, count(*) as open_roles
@@ -248,6 +253,6 @@ companies = run_df(
     group by 1 order by open_roles desc limit 12
     """
 )
-ui.show(ui.hbar(companies, "company_name", "open_roles", value_title="open roles"))
+ui.show(ui.hbar(companies, "company_name", "open_roles", value_title=UNIT))
 
 ui.page_footer()
