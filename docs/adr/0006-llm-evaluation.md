@@ -4,6 +4,8 @@
 **Date:** 2026-07-25
 **Supersedes/extends:** [ADR 0003 — Visa as enum + confidence + evidence](0003-visa-enum-classification.md)
 
+**Amended by:** [ADR 0007 — Stack fit is the product; visa sponsorship is a showcase](0007-fit-first-and-batched-enrichment.md) — the golden-set contract stands; the default target moved to `english_sufficient` because the visa classes proved unmeasurable.
+
 ## Context
 
 ADR 0003 made the classifier's output *structured*: a closed enum, a confidence

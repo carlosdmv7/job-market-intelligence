@@ -2,6 +2,8 @@
 
 **Status:** accepted
 
+**Amended by:** [ADR 0007 — Stack fit is the product; visa sponsorship is a showcase](0007-fit-first-and-batched-enrichment.md) — the enum and its evidence contract stand; the claim that this is the *killer feature* does not.
+
 ## Context
 Visa sponsorship is the killer feature for a Spanish profile relocating to the
 EU. A boolean throws away signal: "no sponsorship" is a strong *negative* filter,
