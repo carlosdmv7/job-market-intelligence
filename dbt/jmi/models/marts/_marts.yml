@@ -34,6 +34,18 @@ models:
       - name: source_key
         data_tests:
           - relationships: { to: ref('DT_SOURCE'), field: source_key }
+      - name: is_active
+        description: >
+          Still visible on its source board as of the corpus's newest
+          observation. Boards delete filled roles instead of closing them, so
+          this is the only liveness signal available. Not a filter — the app
+          defaults to active for browsing and uses the full history for trends.
+        data_tests: [not_null]
+      - name: days_since_seen
+        description: Days between this posting's last sighting and the newest one in the corpus.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range: { min_value: 0 }
       - name: is_visa_sponsor
         description: LLM read of the posting text (soft signal).
         data_tests: [not_null]
