@@ -93,7 +93,7 @@ evals-live: ## Re-score by calling the real LLM (use after a prompt change, then
 	uv run python -m jmi_evals.runner --provider live
 
 app: ## Launch the Streamlit app
-	uv run streamlit run app/streamlit_app/Home.py
+	uv run streamlit run app/streamlit_app/app.py
 
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage* **/*.egg-info build dist
