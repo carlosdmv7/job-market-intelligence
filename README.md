@@ -189,12 +189,22 @@ lifetimes and market trends accumulate one snapshot per day.
 | [enrichment](enrichment) | Pluggable LLM providers (Ollama/Gemini/Anthropic), salary parser, dedup |
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
-| [app](app) | Streamlit app (6 pages, incl. CV Match) + controlled text-to-SQL agent |
+| [app](app) | Streamlit app (6 pages, incl. CV Match) + text-to-SQL agent + the demo sample |
 | [evals](evals) | Golden-set eval harness for the visa classifier (sampler, replay, metrics) |
 | [infra](infra) | Docker Compose (Ollama + app), Dockerfiles |
 | [docs](docs) | Architecture + ADRs |
 
 ## Quickstart
+
+Run it with no credentials at all — the repo ships a committed sample of the
+marts and the app falls back to it, saying so on every page:
+
+```bash
+uv sync --all-packages
+make app                      # http://localhost:8501, demo mode, no secrets
+```
+
+For the real thing:
 
 ```bash
 cp .env.example .env          # set motherduck_token (the only required secret)

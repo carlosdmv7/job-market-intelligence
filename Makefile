@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status evals evals-sample evals-label evals-record evals-live app clean
+.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -73,6 +73,9 @@ dbt-docs: dbt-deps ## Generate + serve the dbt docs site locally
 
 dbt-status: ## Record the last dbt run into meta.pipeline_run (app freshness header)
 	uv run python -m jmi_flows.dbt_status
+
+demo-data: ## Re-export the committed demo sample the app falls back to (needs a warehouse)
+	uv run python -m jmi_flows.export_demo
 
 evals-sample: ## Sample postings into the golden-set labelling template (SIZE=200)
 	uv run python -m jmi_evals.sample --size $(or $(SIZE),200)
