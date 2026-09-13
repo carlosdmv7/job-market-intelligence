@@ -62,6 +62,8 @@ rates = run_df(
     """
 )
 rates["sponsor_rate"] = (rates["sponsors"] / rates["companies"]).fillna(0)
+# Whole corpus on purpose: the question is what share of *employers* on each
+# board can sponsor, which does not depend on which roles they advertise.
 
 r1, r2 = st.columns(2)
 rate_rows = list(rates.sort_values("corpus", ascending=False).iterrows())[:2]
@@ -79,7 +81,7 @@ st.caption(
 st.divider()
 
 # --- filters ---------------------------------------------------------------
-f1, f2, f3 = st.columns([3, 2, 2], gap="medium")
+f1, f2, f3, f4 = st.columns([3, 2, 2, 2], gap="medium")
 search = f1.text_input("Title contains", placeholder="engineer, analyst, ...")
 sponsor_only = f2.toggle("Recognised sponsors only", value=True)
 include_remote = f3.toggle(
@@ -87,9 +89,20 @@ include_remote = f3.toggle(
     value=False,
     help="A recognised sponsor hiring remotely is still a legal sponsorship route.",
 )
+data_roles_only = f4.toggle(
+    "Data roles only",
+    value=True,
+    help=(
+        "Data / analytics / ML titles. The sponsor rates above deliberately use "
+        "the whole corpus — they are a property of the employers, not of the "
+        "roles. This filters the list you browse, and deletes nothing."
+    ),
+)
 
 clauses = ["(country_code = 'NL'" + (" or is_recognised_sponsor)" if include_remote else ")")]
 params: list = []
+if data_roles_only:
+    clauses.append("is_target_role")
 if sponsor_only:
     clauses.append("is_recognised_sponsor")
 if search:
