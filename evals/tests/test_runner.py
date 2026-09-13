@@ -11,6 +11,7 @@ import pytest
 
 from jmi_evals import runner
 from jmi_evals.dataset import GoldenRecord, RecordedResponse, text_hash
+from jmi_evals.targets import VISA
 
 PROMPTS = {
     "sponsor": "Title: Data Engineer\n\nJob description:\nWe sponsor visas for non-EU hires.",
@@ -46,7 +47,9 @@ def wired(monkeypatch):
 
     def install(golden, recordings):
         monkeypatch.setattr(
-            runner, "load_golden_set", lambda **kw: [g for g in golden if g.is_labelled]
+            runner,
+            "load_golden_set",
+            lambda **kw: [g for g in golden if g.is_labelled_for(VISA)],
         )
         monkeypatch.setattr(
             runner, "load_responses", lambda: {r.content_hash: r for r in recordings}
@@ -63,7 +66,7 @@ def test_scores_a_perfect_replay(wired):
     ]
     wired(golden, [_recorded(k, g.visa_status_true) for k, g in zip(PROMPTS, golden, strict=True)])
 
-    report, skipped = runner.run("replay")
+    report, skipped, _ = runner.run("replay", "visa")
     assert report.n == 3
     assert report.accuracy == 1.0
     assert skipped == []
@@ -77,9 +80,9 @@ def test_a_regression_trips_the_committed_threshold(wired):
     # The model has started calling everything 'unclear'.
     wired(golden, [_recorded("sponsor", "unclear"), _recorded("refuses", "unclear")])
 
-    report, _ = runner.run("replay")
+    report, _, _ = runner.run("replay", "visa")
     assert report.accuracy == 0.0
-    failures = runner.check_thresholds(report, runner.load_thresholds())
+    failures = runner.check_thresholds(report, runner.load_thresholds(target="visa"))
     assert failures, "the committed thresholds must catch a total classifier failure"
 
 
@@ -87,15 +90,15 @@ def test_postings_without_a_recording_are_skipped_not_guessed(wired):
     golden = [_golden("sponsor", "explicit_yes"), _golden("silent", "unclear")]
     wired(golden, [_recorded("sponsor", "explicit_yes")])
 
-    report, skipped = runner.run("replay")
+    report, skipped, _ = runner.run("replay", "visa")
     assert report.n == 1
     assert skipped == ["silent"]
 
 
 def test_unlabelled_golden_set_is_not_a_failure(wired):
     wired([], [])
-    with pytest.raises(runner.NothingToScore, match="no labelled rows"):
-        runner.run("replay")
+    with pytest.raises(runner.NothingToScore, match="no row is labelled for target"):
+        runner.run("replay", "visa")
 
 
 def test_text_drift_since_labelling_is_an_error(wired, monkeypatch):
@@ -104,4 +107,4 @@ def test_text_drift_since_labelling_is_an_error(wired, monkeypatch):
     wired([stale], [_recorded("sponsor", "explicit_yes")])
 
     with pytest.raises(ValueError, match="no longer matches"):
-        runner.run("replay")
+        runner.run("replay", "visa")

@@ -1,4 +1,9 @@
-"""Run the visa classifier against the golden set and score it.
+"""Run the classifier against the golden set and score it.
+
+``--target`` picks the field being measured (see :mod:`jmi_evals.targets`).
+It defaults to ``english`` — whether English alone is enough to do the job —
+because that is the field whose classes are balanced enough to score and whose
+answer changes whether a posting is worth applying to.
 
 Two modes, same code path:
 
@@ -22,7 +27,6 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from jmi_core.schema import VisaSponsorshipStatus
 from jmi_enrichment.classifier import JobClassifier
 from jmi_enrichment.providers import ClassificationError
 from jmi_evals.dataset import (
@@ -34,23 +38,30 @@ from jmi_evals.dataset import (
 )
 from jmi_evals.metrics import EvalReport, evaluate, format_confusion, signal_agreement
 from jmi_evals.replay import ReplayProvider
+from jmi_evals.targets import DEFAULT_TARGET, TARGETS, Target
 
 REPORT_PATH = EVALS_ROOT / "report.json"
 
-#: Fixed label order, so the confusion matrix reads good -> bad every run.
-LABELS = [s.value for s in VisaSponsorshipStatus]
 
+def load_thresholds(
+    path: Path = THRESHOLDS_PATH, *, target: str = DEFAULT_TARGET
+) -> dict[str, float]:
+    """The committed quality floor for one target.
 
-def load_thresholds(path: Path = THRESHOLDS_PATH) -> dict[str, float]:
+    Keyed by target name, because a floor that made sense for one field says
+    nothing about another: the visa floor was written when that field was the
+    product and it is kept only to document what was once asserted.
+    """
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8")).get(target, {})
 
 
 def _predict(
     records: list[GoldenRecord],
     *,
     provider_name: str,
+    target: Target,
 ) -> tuple[list[str], list[str], list[bool], list[str]]:
     """Return (y_true, y_pred, recognised_sponsor, skipped) for scorable rows."""
     from jmi_core.settings import get_settings
@@ -90,8 +101,8 @@ def _predict(
         except ClassificationError as exc:
             skipped.append(f"{rec.content_hash} ({exc})")
             continue
-        y_true.append(str(rec.visa_status_true))
-        y_pred.append(str(enrichment.visa.status))
+        y_true.append(str(rec.label_for(target)))
+        y_pred.append(target.predict(enrichment))
         sponsors.append(rec.is_recognised_sponsor)
 
     return y_true, y_pred, sponsors, skipped
@@ -106,23 +117,29 @@ class NothingToScore(RuntimeError):
     """
 
 
-def run(provider_name: str = "replay") -> tuple[EvalReport, list[str]]:
-    records = load_golden_set(labelled_only=True)
+def run(
+    provider_name: str = "replay", target_name: str = DEFAULT_TARGET
+) -> tuple[EvalReport, list[str], Target]:
+    target = TARGETS[target_name]
+    records = load_golden_set(labelled_only=True, target=target)
     if not records:
         raise NothingToScore(
-            "the golden set has no labelled rows yet — fill in `visa_status_true` "
-            "in evals/golden_set.jsonl."
+            f"no row is labelled for target '{target.name}' yet — run "
+            f"`uv run python -m jmi_evals.label --target {target.name}`."
         )
-    y_true, y_pred, sponsors, skipped = _predict(records, provider_name=provider_name)
+    y_true, y_pred, sponsors, skipped = _predict(
+        records, provider_name=provider_name, target=target
+    )
     if not y_true:
         raise NothingToScore(
             "no labelled posting has a recorded response yet — run "
             "`uv run python -m jmi_evals.replay --record` once the daily pipeline "
             "has enriched some of them."
         )
-    report = evaluate(y_true, y_pred, labels=LABELS)
-    report.agreement = signal_agreement(y_pred, sponsors)
-    return report, skipped
+    report = evaluate(y_true, y_pred, labels=list(target.labels))
+    if target.reports_register_agreement:
+        report.agreement = signal_agreement(y_pred, sponsors)
+    return report, skipped, target
 
 
 def check_thresholds(report: EvalReport, thresholds: dict[str, float]) -> list[str]:
@@ -150,6 +167,12 @@ def check_thresholds(report: EvalReport, thresholds: dict[str, float]) -> list[s
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", choices=["replay", "live"], default="replay")
+    parser.add_argument(
+        "--target",
+        choices=sorted(TARGETS),
+        default=DEFAULT_TARGET,
+        help="which classifier output to score (default: %(default)s)",
+    )
     parser.add_argument("--out", type=Path, default=REPORT_PATH)
     parser.add_argument(
         "--check",
@@ -164,7 +187,7 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        report, skipped = run(args.provider)
+        report, skipped, target = run(args.provider, args.target)
     except NothingToScore as exc:
         # Not a regression — there is simply nothing to measure yet. CI prints
         # this and stays green; pass --require-labels to make it a hard failure
@@ -172,9 +195,9 @@ def main() -> None:
         print(f"\nnothing to score: {exc}")
         raise SystemExit(1 if args.require_labels else 0) from None
 
-    labelled_total = len(load_golden_set())
+    labelled_total = len(load_golden_set(labelled_only=True, target=target))
 
-    print(f"\nVisa classifier — {report.n} labelled postings, provider={args.provider}\n")
+    print(f"\n{target.headline} — {report.n} labelled postings, provider={args.provider}\n")
     print(f"accuracy        {report.accuracy:.3f}")
     print(f"macro precision {report.macro_precision:.3f}")
     print(f"macro recall    {report.macro_recall:.3f}")
@@ -186,14 +209,17 @@ def main() -> None:
 
     print("\n" + format_confusion(report))
 
-    print("\nAgreement with the deterministic IND signal (a diagnostic, not a score):")
-    for key, value in report.agreement.items():
-        print(f"  {key:<38} {value}")
+    if report.agreement:
+        print("\nAgreement with the deterministic IND signal (a diagnostic, not a score):")
+        for key, value in report.agreement.items():
+            print(f"  {key:<38} {value}")
 
     if skipped:
         print(f"\nskipped {len(skipped)} postings without a recorded response")
 
     payload = report.to_dict() | {
+        "target": target.name,
+        "target_headline": target.headline,
         "provider": args.provider,
         "skipped": len(skipped),
         "golden_set_size": labelled_total,
@@ -203,7 +229,7 @@ def main() -> None:
     print(f"\nreport -> {args.out}")
 
     if args.check:
-        failures = check_thresholds(report, load_thresholds())
+        failures = check_thresholds(report, load_thresholds(target=target.name))
         if failures:
             print("\nTHRESHOLD FAILURES:")
             for f in failures:

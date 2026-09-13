@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from jmi_core.schema import VisaSponsorshipStatus
+from jmi_evals.targets import DEFAULT_TARGET, TARGETS, EnglishSufficiency, Target
 
 EVALS_ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_SET_PATH = EVALS_ROOT / "golden_set.jsonl"
@@ -35,9 +36,11 @@ def text_hash(prompt_input: str) -> str:
 class GoldenRecord(BaseModel):
     """One hand-labelled posting.
 
-    ``visa_status_true`` is ``None`` in a freshly sampled file and is the only
-    field a human is expected to edit (plus ``notes``). Everything else is
-    provenance, and changing it by hand invalidates the label.
+    The ``*_true`` fields are the labels — ``None`` in a freshly sampled file,
+    and the only fields a human is expected to edit (plus ``notes``). One row
+    can carry a label for more than one target; they are independent, so a row
+    labelled for ``english`` and not for ``visa`` is normal, not incomplete.
+    Everything else is provenance, and changing it by hand invalidates a label.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -58,16 +61,23 @@ class GoldenRecord(BaseModel):
     #: What production said when the row was sampled, for drift analysis only.
     llm_status_at_sampling: VisaSponsorshipStatus | None = None
 
-    #: The label. Fill this in.
+    #: Label for the ``visa`` target. Kept: the labels made against it are
+    #: still valid, even though the corpus turned out too one-sided to score.
     visa_status_true: VisaSponsorshipStatus | None = None
+
+    #: Label for the ``english`` target — can you do this job in English?
+    english_sufficient_true: EnglishSufficiency | None = None
+
     notes: str = ""
 
     #: The exact user-prompt input, rendered by ``build_user_prompt``.
     prompt_input: str = ""
 
-    @property
-    def is_labelled(self) -> bool:
-        return self.visa_status_true is not None
+    def label_for(self, target: Target) -> str | None:
+        return target.truth(self)
+
+    def is_labelled_for(self, target: Target) -> bool:
+        return self.label_for(target) is not None
 
     def check_text(self) -> None:
         actual = text_hash(self.prompt_input)
@@ -80,7 +90,10 @@ class GoldenRecord(BaseModel):
 
 
 def load_golden_set(
-    path: Path = GOLDEN_SET_PATH, *, labelled_only: bool = False
+    path: Path = GOLDEN_SET_PATH,
+    *,
+    labelled_only: bool = False,
+    target: str | Target = DEFAULT_TARGET,
 ) -> list[GoldenRecord]:
     if not path.exists():
         raise FileNotFoundError(
@@ -92,7 +105,10 @@ def load_golden_set(
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    return [r for r in records if r.is_labelled] if labelled_only else records
+    if not labelled_only:
+        return records
+    resolved = TARGETS[target] if isinstance(target, str) else target
+    return [r for r in records if r.is_labelled_for(resolved)]
 
 
 def save_golden_set(records: list[GoldenRecord], path: Path = GOLDEN_SET_PATH) -> None:
