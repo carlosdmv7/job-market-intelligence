@@ -139,17 +139,21 @@ df = run_df(
 )
 
 sponsor_rows = df[df["is_recognised_sponsor"]]
-m1, m2, m3 = st.columns(3)
-# "Matching postings" and "At recognised sponsors" used to sit side by side and
-# showed the same number whenever the sponsors-only toggle was on — which is its
-# default. Two metrics, one fact, and it read as a bug.
+# "At recognised sponsors" is the same number as "Open roles listed" whenever the
+# sponsors-only toggle is on — which is its default — so it is only rendered when
+# it can differ. Two metrics showing one fact reads as a bug, and renaming one
+# does not fix it.
+if sponsor_only:
+    m1, m2 = st.columns(2)
+else:
+    m1, m2, m3 = st.columns(3)
+    m3.metric("At recognised sponsors", f"{len(sponsor_rows):,}")
 m1.metric(
     "Open roles listed",
     f"{len(df):,}",
     help="After the filters above. Closed postings are never listed on this page.",
 )
-m2.metric("At recognised sponsors", f"{len(sponsor_rows):,}")
-m3.metric("Distinct sponsor companies", f"{sponsor_rows['company_name'].nunique():,}")
+m2.metric("Distinct sponsor companies", f"{sponsor_rows['company_name'].nunique():,}")
 
 if not sponsor_rows.empty:
     st.markdown("##### Recognised sponsors with the most open roles")
