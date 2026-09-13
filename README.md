@@ -4,27 +4,31 @@
 [![Daily pipeline](https://github.com/carlosdmv7/job-market-intelligence/actions/workflows/pipeline.yml/badge.svg)](https://github.com/carlosdmv7/job-market-intelligence/actions/workflows/pipeline.yml)
 
 An end-to-end **data-engineering + analytics-engineering + LLM** project that
-ingests EU tech jobs daily, enriches them with an LLM, models them dimensionally
-with dbt, and serves the result through a 6-page Streamlit app — including a
-guard-railed natural-language **"Ask the Data"** agent and a session-only
-**CV Match**.
+answers one question daily: **which open data roles across the EU match my
+stack?**
+
+It ingests postings from five free job APIs, has an LLM read each one for its
+tech stack, seniority and working language, models the result dimensionally with
+dbt, and serves it through a 7-page Streamlit app — with stack-overlap CV
+scoring, a guard-railed natural-language **"Ask the Data"** agent, and a
+classifier measured against a hand-labelled golden set rather than trusted.
+
+Coverage is honest about itself: a posting the LLM has not read yet says so
+everywhere, and a posting that has left its source board is marked closed rather
+than shown as if you could still apply.
 
 **Live app:** [job-market-intelligence-carlosdmv7.streamlit.app](https://job-market-intelligence-carlosdmv7.streamlit.app/) · **Runs at 0€** end to end (MotherDuck free tier,
 Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
 [ADR 0005](docs/adr/0005-zero-cost-stack.md)).
 
-[![The NL Visa Audit page: sponsor rates, the IND cross-reference, and per-posting evidence](docs/img/visa-sponsorship.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/NL_Visa_Audit)
+[![The Overview page: open data roles per country, the stacks being hired for, and live coverage](docs/img/home.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/)
 
 <details>
-<summary><b>More screens</b> — landing page, Market Trends, Ask the Data, How It Works</summary>
+<summary><b>More screens</b> — Market Trends, Ask the Data, How It Works, visa showcase</summary>
 
-**Landing page** — leads with the measured sponsor-rate gap, not the stack.
+**Market Trends** — which countries hire, which stacks they ask for, and how both move across 60+ days of daily snapshots.
 
-![Landing page with the sponsor-rate contrast and per-market breakdown](docs/img/home.png)
-
-**Market Trends** — composition and movement over time; colour is always the visa signal.
-
-![Market Trends: top hiring companies by visa signal, postings by source and market, daily snapshots](docs/img/market-trends.png)
+![Market Trends: open roles per country with English-sufficiency, leading stacks over time, daily snapshots](docs/img/market-trends.png)
 
 **Ask the Data** — natural language in, guard-railed read-only SQL out.
 
@@ -32,14 +36,24 @@ Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
 
 **How It Works** — the real prompt, live coverage, and the classifier's eval scores.
 
-![How It Works: the pipeline, the two visa signals, the system prompt, and the eval harness](docs/img/how-it-works.png)
+![How It Works: the pipeline diagram, the deterministic-vs-model signal split, the real system prompt, and the eval harness](docs/img/how-it-works.png)
+
+**Visa sponsorship (Netherlands)** — the auditable-data showcase: register match, KvK number, and the model's read side by side.
+
+![The Netherlands visa page: sponsor rates, the IND cross-reference, and per-posting evidence](docs/img/visa-sponsorship.png)
 
 </details>
 
-## The differentiating feature: auditable visa-sponsorship detection
+## The differentiating feature: signals you can audit, and coverage that admits its gaps
 
-Most "AI job board" projects ask an LLM whether a posting sponsors visas and
-stop there. This project treats the LLM as the *weakest* of two signals:
+Most "AI job board" projects pipe postings through an LLM and present whatever
+comes back as fact. Two disciplines here instead.
+
+**Facts that can be looked up are never inferred.** Where a question has an
+authoritative source, the project uses it and shows you the receipt; the LLM is
+reserved for what only exists as prose. Visa sponsorship is the one field where
+both are available for the same question, so it is the clearest demonstration —
+and it is treated as a showcase, not as the product:
 
 1. **Deterministic (primary):** every posting's company is cross-referenced
    against the official **IND register of recognised sponsors** — the ~12,800
@@ -60,25 +74,34 @@ accumulates daily, so missing evidence is the normal state for most rows;
 conflating it with negative evidence would break the one thing this tool is
 for.
 
-Why it matters, measured on this corpus: on remote-first job boards only
-**~1%** of companies are recognised sponsors; on the NL-local corpus (Adzuna)
-it is **~34%** — the deterministic signal is what makes the tool actually
-useful for relocation, and it works even for postings the LLM never saw.
+Measured on this corpus: **~3%** of companies on remote-first boards are
+recognised sponsors against **~34%** on the Dutch local corpus — a gap a model
+reading job text would never find, and one that holds for postings the LLM has
+never seen.
 
-## The app: six pages
+**Absence is never reported as a finding.** Two failure modes the project
+refuses: an unread posting shown as a negative result, and a filled role shown
+as if you could still apply to it. Enrichment is capped by a free tier at a
+measured 20 requests/day/model (batched 10 postings per request), so partial
+coverage is the permanent normal state — every surface labels it. And because
+boards delete filled roles instead of closing them, "days since we last saw it"
+becomes an `is_active` flag, with closed roles kept for the trends and excluded
+from the lists.
+
+## The app: seven pages
 
 | Page | What it answers |
 |---|---|
-| **Job Explorer** | Every posting as a filterable card: market, role family, seniority, parsed salary, both visa signals |
-| **Market Trends** | Composition and movement over time — hiring companies, sources, markets, daily snapshots |
-| **NL Visa Audit** | The killer feature: sponsor rates, the IND register cross-reference, per-posting evidence |
+| **Overview** | How many data roles are open right now, in which countries, for which stacks |
+| **Find Jobs** | Every open posting as a filterable card: market, stack, seniority, parsed salary, working language |
+| **My Fit** | Your CV against every open role — free stack-overlap ranking, then one LLM call on the posting you pick |
+| **Market Trends** | Country comparison incl. how often English alone suffices, leading stacks day by day, 60+ days of snapshots |
 | **Ask the Data** | Natural language in, guard-railed read-only SQL out, with the generated SQL always shown |
-| **CV Match** | Your CV against the whole corpus — free skill-overlap ranking, then one LLM call on the posting you pick |
-| **How It Works** | The real prompt, live enrichment coverage, and the classifier's eval scores |
+| **How It Works** | The pipeline diagram, the real system prompt, live coverage, and the classifier's eval scores |
+| **Visa sponsorship (NL)** | The auditable-data showcase: IND register cross-reference, KvK receipts, per-posting evidence |
 
-**CV Match** (added 19 Jul 2026) is deliberately two-tier, for the same reason
-the visa signal is: spend nothing where determinism suffices, spend the LLM
-where it earns its cost.
+**My Fit** is deliberately two-tier, for the same reason the visa signal is:
+spend nothing where determinism suffices, spend the LLM where it earns its cost.
 
 1. **Free and instant** — the CV is intersected with the technology vocabulary
    the LLM *already* extracted from postings, and every enriched posting is
@@ -99,7 +122,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
-   Streamlit: Explorer · Trends · NL Visa Audit · Ask the Data · CV Match · How It Works
+   Streamlit: Overview · Find Jobs · My Fit · Trends · Ask the Data · How It Works · Visa (NL)
 ```
 
 **The 5 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
@@ -116,7 +139,7 @@ A sixth scraper, `honeypot`, is registered but **not verified** — its API is
 unconfirmed, it is not in `DEFAULT_SOURCES`, and the daily pipeline does not
 call it. It is a hook, not a source, and is excluded from every count here.
 
-dbt lineage (rendered from the real DAG — 9 models, 1 seed, 45 data tests):
+dbt lineage (rendered from the real DAG — 9 models, 1 seed, 49 data tests):
 
 ```mermaid
 flowchart LR
@@ -173,7 +196,7 @@ lifetimes and market trends accumulate one snapshot per day.
 |---|---|
 | Contracts (Pydantic v2, `content_hash`, `SCHEMA_VERSION`) | Production-grade: versioned, hash-stable, 100% typed |
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
-| dbt medallion (dedup grain, quality tests) | Production-grade: 45 data tests incl. grain + invariant tests |
+| dbt medallion (dedup grain, quality tests) | Production-grade: 49 data tests incl. grain + invariant tests |
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: Gemini free tier caps daily throughput; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
@@ -189,8 +212,8 @@ lifetimes and market trends accumulate one snapshot per day.
 | [enrichment](enrichment) | Pluggable LLM providers (Ollama/Gemini/Anthropic), salary parser, dedup |
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
-| [app](app) | Streamlit app (6 pages, incl. CV Match) + text-to-SQL agent + the demo sample |
-| [evals](evals) | Golden-set eval harness for the visa classifier (sampler, replay, metrics) |
+| [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
+| [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
 | [infra](infra) | Docker Compose (Ollama + app), Dockerfiles |
 | [docs](docs) | Architecture + ADRs |
 
@@ -216,7 +239,7 @@ make ingest-nl                # Adzuna NL (needs free ADZUNA_APP_ID/KEY)
 make ingest SOURCE=adzuna COUNTRY=de   # any Adzuna country (nl/es/de/fr/it/...)
 make sponsors-refresh         # IND register -> dbt seed (monthly)
 make enrich                   # LLM classification -> raw
-make dbt-build                # staging -> marts (+ 45 data tests)
+make dbt-build                # staging -> marts (+ 49 data tests)
 make evals                    # score the visa classifier (offline, replayed)
 make app                      # Streamlit at http://localhost:8501
 ```
