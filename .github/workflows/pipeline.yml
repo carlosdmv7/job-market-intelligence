@@ -73,15 +73,21 @@ jobs:
             uv run python -m jmi_flows.ingest --source "$s" || true
           done
 
-      # ~50 postings/day stays comfortably inside the Gemini free daily quota;
-      # NL rows are enriched first (see fetch_postings_needing_enrichment).
-      # Enrichment is best-effort: it must never eat the job's time budget and
-      # starve dbt build (the classifier also opens a circuit breaker after 5
-      # consecutive provider failures, e.g. an exhausted daily quota).
+      # The limit is the *measured* Gemini free-tier ceiling, not a guess. The
+      # 429 body names it outright: quotaId
+      # GenerateRequestsPerDayPerProjectPerModel-FreeTier, quotaValue 20 — that
+      # is 20 requests per day, per model. An earlier comment here claimed 50
+      # "stays comfortably inside the quota"; in fact every run had been hitting
+      # the wall at 20 and the surplus was spent on retry backoff.
+      #
+      # Data roles only, freshest first (see fetch_postings_needing_enrichment).
+      # Best-effort: it must never eat the job's time budget and starve dbt
+      # build (the classifier also opens a circuit breaker after 5 consecutive
+      # provider failures, e.g. an exhausted daily quota).
       - name: Enrich pending postings (LLM)
         continue-on-error: true
         timeout-minutes: 15
-        run: uv run python -m jmi_flows.enrich --limit 50
+        run: uv run python -m jmi_flows.enrich --limit 20
 
       - name: dbt build (staging -> marts)
         working-directory: dbt/jmi

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import duckdb
 
+from jmi_core.roles import TARGET_ROLE_PATTERN
 from jmi_core.schema.enrichment import JobEnrichment
 from jmi_core.schema.raw import JobPosting
 
@@ -199,7 +200,20 @@ class Warehouse:
 
     # --- reads -----------------------------------------------------------
     def fetch_postings_needing_enrichment(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Latest content version per posting that has no enrichment row yet."""
+        """Latest content version per posting that has no enrichment row yet.
+
+        The ordering is the whole point of this query: the LLM is quota-capped,
+        so what it reads first decides what the app can actually show. Two
+        filters, both learned the hard way:
+
+        * **Data roles only.** The free boards hand back their entire catalogue,
+          so without this the quota goes to Steuerberater and hotel managers and
+          the stack-overlap ranking stays empty. Same pattern as the scrapers
+          and the ``jmi_is_target_role`` dbt macro, from one definition.
+        * **Freshest sighting first.** An earlier version ordered NL rows first,
+          because the visa signal was the product. It isn't, and enriching a
+          posting that left the board weeks ago buys nothing.
+        """
         sql = """
         WITH latest AS (
             SELECT DISTINCT ON (content_hash) *
@@ -212,12 +226,11 @@ class Warehouse:
         FROM latest l
         LEFT JOIN raw.raw_job_enrichment e USING (content_hash)
         WHERE e.content_hash IS NULL
-        -- NL first: the relocation corpus is the one the visa signal exists for,
-        -- so a quota-capped batch must never spend itself on remote-board rows.
-        ORDER BY (l.country_code = 'NL') DESC NULLS LAST, l.scraped_at DESC
+          AND regexp_matches(COALESCE(l.title, ''), ?, 'i')
+        ORDER BY l.scraped_at DESC
         LIMIT ?
         """
-        return self.query(sql, [limit])
+        return self.query(sql, [TARGET_ROLE_PATTERN.pattern, limit])
 
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
         """Run a query and return rows as dicts."""

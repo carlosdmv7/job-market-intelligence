@@ -40,6 +40,7 @@ from jmi_evals.dataset import (
     save_golden_set,
     text_hash,
 )
+from jmi_evals.targets import TARGETS
 
 log = get_logger(__name__)
 
@@ -234,8 +235,12 @@ def main() -> None:
     args = parser.parse_args()
 
     existing = load_golden_set(args.out) if args.out.exists() else []
-    labelled = sum(1 for r in existing if r.is_labelled)
-    print(f"existing golden set: {len(existing)} rows ({labelled} labelled)")
+    counts = {
+        name: sum(1 for r in existing if r.is_labelled_for(target))
+        for name, target in TARGETS.items()
+    }
+    spread = ", ".join(f"{n}: {c}" for n, c in sorted(counts.items()))
+    print(f"existing golden set: {len(existing)} rows (labelled — {spread})")
 
     settings = get_settings()
     wh = Warehouse(

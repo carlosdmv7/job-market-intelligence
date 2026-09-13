@@ -51,7 +51,7 @@ with st.expander("Show the pipeline diagram"):
 ```
 Adzuna NL/DE/ES + JobTech SE + free remote boards ──► raw.raw_job_postings   (append-only)
 IND recognised-sponsor register (scraper → dbt seed)                          (monthly)
-LLM enrichment (Gemini free tier, ~50 postings/day) ──► raw.raw_job_enrichment
+LLM enrichment (Gemini free tier, 20 req/day/model) ─► raw.raw_job_enrichment
 dbt build: staging → dedup → marts  (45 data tests must pass, every day)
 ```
 
@@ -113,7 +113,8 @@ with st.expander("Why the prompt is designed this way"):
   the sentence that says so. That quote is displayed, not summarized.
 - **"Unknown" is a valid answer** — the rubric explicitly prefers `unknown`/null +
   low confidence over guessing.
-- **Free-tier aware** — ~50 postings/day fit the Gemini free quota; a circuit
+- **Free-tier aware** — the Gemini free tier allows a measured 20 requests/day
+  per model, so the batch is capped there rather than at a guess; a circuit
   breaker stops the batch after 5 consecutive provider failures (a dead quota),
   and results are upserted in chunks of 10 so an interrupted run loses almost
   nothing. Coverage accumulates daily, NL first.
@@ -174,17 +175,27 @@ def _eval_report() -> dict | None:
         return None
 
 
-def _golden_progress() -> tuple[int, int]:
-    """(labelled, total) — read from the committed golden set."""
+#: Which golden-set field holds the label for each eval target.
+_TRUTH_FIELD = {"english": "english_sufficient_true", "visa": "visa_status_true"}
+
+
+def _golden_progress(target: str) -> tuple[int, int]:
+    """(labelled, total) for one target — read from the committed golden set.
+
+    Per target, because the two are labelled independently: a row answered for
+    English is not a row answered for visas, and counting them together would
+    overstate how much of the set is actually usable for the score shown.
+    """
     if not _GOLDEN_SET.exists():
         return 0, 0
+    field = _TRUTH_FIELD.get(target, "english_sufficient_true")
     total = labelled = 0
     for line in _GOLDEN_SET.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         total += 1
         try:
-            if json.loads(line).get("visa_status_true") is not None:
+            if json.loads(line).get(field) is not None:
                 labelled += 1
         except json.JSONDecodeError:
             continue
@@ -192,11 +203,36 @@ def _golden_progress() -> tuple[int, int]:
 
 
 report = _eval_report()
-labelled, total = _golden_progress()
+_target = (report or {}).get("target", "english")
+_headline = (report or {}).get("target_headline", "Classifier")
+labelled, total = _golden_progress(_target)
+
+with st.expander("Why this measures English-sufficiency and not visa sponsorship"):
+    st.markdown(
+        """
+The harness was built around the visa field, because visa sponsorship was the
+product. The measurement is what retired it: across 730 postings the classifier
+had read, its own output was `unclear` 583 times and `explicit_yes` **once**.
+
+Fourteen hand labels then scored 0.000 precision on `explicit_yes` — not because
+the model failed, but because a class that rare cannot be measured. No amount of
+further labelling fixes that; the corpus simply does not contain the signal.
+
+So the target moved to a field that *is* measurable and that changes a decision:
+**can someone who speaks English but not the local language do this job?** The
+corpus splits roughly 355 / 330 / 45 on it. The visa labels are kept and
+`--target visa` still scores them — a retired metric is part of the record, not
+an embarrassment to delete.
+"""
+    )
 
 if report and report.get("n", 0) >= _MIN_SCORED:
     e1, e2, e3, e4 = st.columns(4)
-    e1.metric("Accuracy", f"{report['accuracy']:.0%}", help=f"On {report['n']} scored postings.")
+    e1.metric(
+        "Accuracy",
+        f"{report['accuracy']:.0%}",
+        help=f"{_headline}, on {report['n']} scored postings.",
+    )
     e2.metric(
         "Macro F1",
         f"{report['macro_f1']:.2f}",
@@ -210,7 +246,7 @@ if report and report.get("n", 0) >= _MIN_SCORED:
     ui.table(
         per_class[["class", "support", "precision", "recall", "f1"]],
         column_config={
-            "class": st.column_config.TextColumn("Visa status"),
+            "class": st.column_config.TextColumn("Class"),
             "support": st.column_config.NumberColumn(
                 "Support", help="How many labelled postings truly are this class."
             ),

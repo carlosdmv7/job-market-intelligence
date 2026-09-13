@@ -11,6 +11,14 @@ enrichment as (
 
 sponsors as (
     select * from {{ ref('stg_recognised_sponsors') }}
+),
+
+-- Freshness is measured against the newest observation in the corpus, never
+-- against current_date. A posting is "stale" because we stopped seeing it on
+-- the board, which is evidence; if ingestion stalls, current_date would flip
+-- the whole corpus to stale on a calendar technicality instead.
+observed as (
+    select max(scraped_at) as corpus_last_seen from postings
 )
 
 select
@@ -38,6 +46,13 @@ select
     p.valid_through,
     p.salary_raw,
     p.scraped_at                                                   as last_seen_at,
+
+    -- Was this posting still on the board the last time we swept its source?
+    -- Boards delete filled roles rather than marking them closed, so
+    -- "days since we could still see it" is the only liveness signal there is.
+    date_diff('day', p.scraped_at, o.corpus_last_seen)              as days_since_seen,
+    date_diff('day', p.scraped_at, o.corpus_last_seen)
+        <= {{ var('active_window_days', 7) }}                       as is_active,
 
     -- enrichment (normalized)
     e.normalized_role,
@@ -76,5 +91,6 @@ select
     -- decides where relevance matters (browsing) and where it does not (history).
     {{ jmi_is_target_role('p.title') }}                            as is_target_role
 from postings p
+cross join observed o
 left join enrichment e on p.content_hash = e.content_hash
 left join sponsors s on {{ jmi_normalize_company('p.company_name') }} = s.company_norm

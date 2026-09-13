@@ -30,3 +30,10 @@ seeds:
       +column_types:
         organisation: varchar
         kvk_number: varchar  # keep leading zeros; KvK is an identifier, not a number
+
+vars:
+  # A posting counts as active if we still saw it within this many days of the
+  # corpus's newest observation. The pipeline sweeps daily, so a live posting is
+  # normally re-seen every run; 7 days absorbs a flaky scrape without letting a
+  # filled role linger as if it were open.
+  active_window_days: 7

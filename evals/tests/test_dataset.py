@@ -36,7 +36,7 @@ def test_roundtrip_preserves_labels(tmp_path):
 
     everything = load_golden_set(path)
     assert len(everything) == 2
-    labelled = load_golden_set(path, labelled_only=True)
+    labelled = load_golden_set(path, labelled_only=True, target="visa")
     assert len(labelled) == 1
     assert labelled[0].visa_status_true == "explicit_yes"
 

@@ -18,8 +18,11 @@ from jmi_core.text import strip_html
 
 ui.configure_page("Job Explorer")
 ui.page_header(
-    title="🔎 Job Explorer",
-    subtitle="All markets, all sources. Select a row to open the full posting card.",
+    title="🔎 Find Jobs",
+    subtitle=(
+        "Open data roles across every market and source, de-duplicated. "
+        "Select a row to open the full posting card."
+    ),
 )
 
 require_marts(
@@ -42,37 +45,43 @@ techs = run_df(
     """
 )["tech"].tolist()
 
+ORDERINGS = {
+    # Default: freshest sighting first. Most recently confirmed open is the most
+    # actionable ordering once you are browsing only live postings.
+    "Last seen": "last_seen_at desc nulls last",
+    "Newest posted": "posted_at desc nulls last",
+    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
+    "Visa signal": "is_recognised_sponsor desc, is_enriched desc, last_seen_at desc",
+}
+
 f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
 picked_markets = f1.multiselect("Market", market_options, default=[])
 search = f2.text_input("Title or company contains", placeholder="engineer, dbt, Spotify…")
 picked_techs = f3.multiselect("Technologies (LLM-extracted)", techs)
-sort = f4.selectbox("Sort by", ["Visa signal", "Newest", "Language fit"])
+sort = f4.selectbox("Sort by", list(ORDERINGS))
 
-ORDERINGS = {
-    # Default: the signal this app exists for, then recency.
-    "Visa signal": (
-        f"{ui.POSTINGS_ORDER.split(',')[0]}, "
-        "(visa_status in ('explicit_yes', 'likely_yes')) desc, last_seen_at desc"
-    ),
-    "Newest": "last_seen_at desc",
-    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
-}
 
 g1, g2, g3, g4, g5 = st.columns(5, gap="medium")
-data_roles_only = g1.toggle(
+active_only = g1.toggle(
+    "Open only",
+    value=True,
+    help=(
+        "Still visible on its source board in the latest sweep. Boards delete "
+        "filled roles instead of closing them, so a posting we stopped seeing "
+        "is almost certainly gone. Off shows the full history."
+    ),
+)
+data_roles_only = g2.toggle(
     "Data roles only",
     value=True,
     help=(
-        "Data / analytics / ML titles. On by default: the free boards publish "
-        "their whole catalogue, so most of what was ingested before the role "
-        "filter existed is sales, finance and hospitality. Turn it off to see "
-        "the raw corpus — nothing is deleted, only hidden."
+        "Data / analytics / ML titles. The free boards publish their whole "
+        "catalogue, so off also shows sales, finance and hospitality."
     ),
 )
-sponsor_only = g2.toggle("IND sponsor only", help="Company on the Dutch IND register.")
-english_only = g3.toggle("English is sufficient", help="Per the LLM read of the text.")
-visa_signal = g4.toggle("Visa signal in text", help="LLM read: explicit_yes or likely_yes.")
-enriched_only = g5.toggle("LLM-enriched only")
+english_only = g3.toggle("English is enough", help="Per the LLM read of the posting.")
+enriched_only = g4.toggle("LLM-read only", help="Has a parsed stack, seniority and language.")
+sponsor_only = g5.toggle("IND sponsor only", help="Company on the Dutch visa-sponsor register.")
 
 clauses: list[str] = []
 params: list = []
@@ -92,14 +101,14 @@ if search:
 for tech in picked_techs:
     clauses.append("list_contains(technologies, ?)")
     params.append(tech)
+if active_only:
+    clauses.append("is_active")
 if data_roles_only:
     clauses.append("is_target_role")
 if sponsor_only:
     clauses.append("is_recognised_sponsor")
 if english_only:
     clauses.append("english_sufficient")
-if visa_signal:
-    clauses.append("visa_status in ('explicit_yes', 'likely_yes')")
 if enriched_only:
     clauses.append("is_enriched")
 where = (" where " + " and ".join(clauses)) if clauses else ""
@@ -109,6 +118,7 @@ df = run_df(
     select
         job_posting_key, content_hash, title, company_name, country_code, location_raw,
         seniority, salary_raw, source, source_url, apply_url, posted_at, last_seen_at,
+        is_active, days_since_seen,
         is_recognised_sponsor, sponsor_kvk, visa_status, visa_confidence, visa_evidence,
         visa_reasoning, is_enriched, english_sufficient, requires_local_language,
         working_languages, relocation_support, technologies, normalized_role,
@@ -123,7 +133,11 @@ df = run_df(
     tuple(params),
 )
 
-st.caption(f"**{len(df):,}** matching postings (showing up to 1,000).")
+st.caption(
+    f"**{len(df):,}** matching "
+    + ("open roles" if active_only else "postings")
+    + " (showing up to 1,000)."
+)
 
 grid = ui.add_salary_eur(df)
 grid["market"] = grid["country_code"].map(ui.market_label)
