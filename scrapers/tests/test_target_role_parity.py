@@ -19,7 +19,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from jmi_scrapers.free_apis import is_target_role
+from jmi_core.roles import is_target_role
 
 _MACRO = Path(__file__).resolve().parents[2] / "dbt" / "jmi" / "macros" / "jmi_is_target_role.sql"
 

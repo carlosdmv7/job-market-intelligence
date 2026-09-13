@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from jmi_core.roles import is_target_role
 from jmi_core.schema import JobSource
 from jmi_core.settings import Settings
 from jmi_scrapers.free_apis import (
@@ -10,7 +11,6 @@ from jmi_scrapers.free_apis import (
     JobTechScraper,
     RemoteOkScraper,
     RemotiveScraper,
-    is_target_role,
 )
 
 
