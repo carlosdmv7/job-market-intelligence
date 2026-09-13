@@ -28,17 +28,29 @@ from jmi_enrichment.providers import get_provider
 
 ui.configure_page("CV Match")
 ui.page_header(
-    title="🎯 CV Match",
+    title="🎯 My Fit",
     subtitle=(
-        "Upload or paste your CV → every LLM-enriched posting gets a skill-overlap score, "
-        "free and instant. Then spend **one** LLM call on the posting you care about."
+        "Paste your CV and every open role gets scored on how much of its stack you "
+        "already have — instantly, with no LLM call."
     ),
 )
-st.info(
-    "🔒 **Your CV never leaves this session.** It is not stored anywhere; closing the "
-    "tab discards it. Only the explicit deep-dive button sends it (with one posting) "
-    "to the LLM.",
-    icon="🔒",
+st.caption(
+    "🔒 Your CV stays in this browser session: never stored, never logged, gone when you "
+    "close the tab. Only the deep-dive button below sends anything to a model."
+)
+
+st.markdown(
+    """
+**How it works — two steps, and the first one is free.**
+
+1. **Every open role gets scored** against the technologies found in your CV. This is
+   plain set arithmetic, runs instantly, and costs nothing.
+2. **Pick one role** and spend a single LLM call on a written read of your fit against
+   that specific posting.
+
+Only roles whose stack the LLM has already extracted can be scored, so the list grows
+as coverage does.
+"""
 )
 
 require_marts(
@@ -106,8 +118,8 @@ ranked["market"] = ranked["country_code"].map(ui.market_label)
 
 st.markdown(f"##### Ranked matches — {len(ranked):,} open roles with a parsed stack")
 st.caption(
-    "Score = share of the posting's technologies your CV covers. Only roles the LLM has "
-    "read are rankable, and only ones still open are listed."
+    "**Score = the share of a posting's technologies your CV already covers.** Only open "
+    "roles whose stack the LLM has read can be ranked, so this list grows daily."
 )
 
 event = st.dataframe(

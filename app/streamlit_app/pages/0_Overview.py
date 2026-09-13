@@ -108,14 +108,19 @@ with market_col:
         """
     )
     markets["market"] = markets["country_code"].map(ui.market_label)
+    markets["share"] = markets["open_roles"] / max(live, 1)
     ui.table(
-        markets[["market", "open_roles", "companies"]],
+        markets[["market", "open_roles", "companies", "share"]],
         column_config={
             "market": st.column_config.TextColumn("Market"),
-            "open_roles": st.column_config.NumberColumn("Open roles"),
-            "companies": st.column_config.NumberColumn("Companies"),
+            "open_roles": st.column_config.NumberColumn("Roles"),
+            "companies": st.column_config.NumberColumn("Firms"),
+            "share": st.column_config.ProgressColumn(
+                "Share", format="percent", min_value=0.0, max_value=1.0
+            ),
         },
     )
+    st.page_link("pages/2_Market_Trends.py", label="Compare markets in detail", icon="📈")
 
 st.divider()
 

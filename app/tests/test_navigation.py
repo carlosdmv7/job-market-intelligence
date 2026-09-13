@@ -46,4 +46,4 @@ def test_overview_page_links_point_at_registered_pages():
     at = AppTest.from_file(ENTRY, default_timeout=180)
     at.run()
     targets = {link.page for link in at.get("page_link")}
-    assert targets == {"CV_Match", "Job_Explorer"}
+    assert targets == {"CV_Match", "Job_Explorer", "Market_Trends"}
