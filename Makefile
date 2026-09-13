@@ -71,7 +71,7 @@ dbt-build: dbt-deps ## Run dbt staging -> marts
 dbt-docs: dbt-deps ## Generate + serve the dbt docs site locally
 	set -a; [ -f .env ] && . ./.env; set +a; cd dbt/jmi && uv run dbt docs generate && uv run dbt docs serve
 
-dbt-status: ## Distil the last dbt run into docs/status/pipeline.json (app freshness header)
+dbt-status: ## Record the last dbt run into meta.pipeline_run (app freshness header)
 	uv run python -m jmi_flows.dbt_status
 
 evals-sample: ## Sample postings into the golden-set labelling template (SIZE=200)
