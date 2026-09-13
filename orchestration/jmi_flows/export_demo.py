@@ -47,8 +47,18 @@ DEFAULT_OUT = _REPO_ROOT / "app" / "demo"
 DEFAULT_POSTINGS = 2000
 SAMPLE_SEED = 42
 
-#: Trends charts need history, but not all of it.
-SNAPSHOT_DAYS = 90
+#: The sample is **stratified**, not uniform. A flat draw over the whole corpus
+#: gave the demo 130 open data roles out of 2,000 rows — because open data roles
+#: are ~7% of the warehouse — so the page every visitor lands on looked empty
+#: while the parquet was full. The default view gets priority; the remainder is
+#: filled with everything else so the history charts and the "show all" toggles
+#: still have something behind them.
+LIVE_SHARE = 0.6
+
+#: Trends charts need history, but not all of it — and the file has to stay
+#: under the 512 KB pre-commit cap, which a full history breaches once the
+#: fact sample is weighted toward live postings (they have the most snapshots).
+SNAPSHOT_DAYS = 30
 
 
 def export(out: Path, *, postings: int = DEFAULT_POSTINGS) -> dict[str, int]:
@@ -60,11 +70,19 @@ def export(out: Path, *, postings: int = DEFAULT_POSTINGS) -> dict[str, int]:
     with Warehouse(settings.duckdb_database, motherduck_token=settings.motherduck_token) as source:
         # The fact table first: every other table is filtered to what it needs,
         # so the app's joins behave exactly as they do against MotherDuck.
+        live_budget = int(postings * LIVE_SHARE)
         counts["FT_JOB_POSTING"] = _write(
             source,
             out / "FT_JOB_POSTING.parquet",
-            "select * from marts.FT_JOB_POSTING "
-            f"using sample {postings} rows (reservoir, {SAMPLE_SEED})",
+            f"""
+            select * from (
+                select * from marts.FT_JOB_POSTING where is_target_role and is_active
+            ) using sample {live_budget} rows (reservoir, {SAMPLE_SEED})
+            union all
+            select * from (
+                select * from marts.FT_JOB_POSTING where not (is_target_role and is_active)
+            ) using sample {postings - live_budget} rows (reservoir, {SAMPLE_SEED})
+            """,
         )
         # Everything below filters against the sample that was just written, so
         # read it back as a view rather than re-sampling (which would draw a
@@ -93,7 +111,8 @@ def export(out: Path, *, postings: int = DEFAULT_POSTINGS) -> dict[str, int]:
             source,
             out / "FT_JOB_SNAPSHOT_DAILY.parquet",
             "select * from marts.FT_JOB_SNAPSHOT_DAILY where content_hash in "
-            "(select distinct content_hash from sampled)",
+            "(select distinct content_hash from sampled) "
+            f"and date_key >= current_date - {SNAPSHOT_DAYS}",
         )
         counts["pipeline_run"] = _write(
             source,
