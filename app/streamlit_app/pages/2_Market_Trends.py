@@ -1,4 +1,12 @@
-"""Market composition + temporal trends from the marts."""
+"""Market Trends — where the roles are, which stacks they want, how that moves.
+
+Scoped to open data roles by default, like every other list in the app, so a
+number here and a number in Find Jobs cannot disagree. Closed roles stay
+available behind the toggle: they are the only reason a history exists.
+
+The charts answer three questions in order — *which country*, *which stack*,
+*which direction* — because that is the order the decisions get made in.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +19,8 @@ ui.configure_page("Market Trends")
 ui.page_header(
     title="📈 Market Trends",
     subtitle=(
-        "What the tracked markets (🇳🇱 🇸🇪 🇩🇪 🇪🇸 + remote boards) look like right now, "
-        "and how they move over time."
+        "Which countries are hiring data people, which stacks they ask for, "
+        "and how both move over time."
     ),
 )
 
@@ -21,49 +29,133 @@ require_marts(
     missing="Connected, but no marts yet — run the pipeline, then `make dbt-build`.",
 )
 
-# --- current composition ---------------------------------------------------
-st.markdown("##### Top hiring companies")
-st.caption(
-    "Colour is the visa signal: a deterministic IND register match, a text-only signal "
-    "from the LLM, or a posting the LLM has not read yet."
+open_only = st.toggle(
+    "Open data roles only",
+    value=True,
+    help=(
+        "Off includes closed roles and non-data jobs. The history charts below "
+        "always span every day on record — that is what they are for."
+    ),
 )
-comp = run_df(
+SCOPE = "is_target_role and is_active" if open_only else "true"
+
+# --- 1 · which country -----------------------------------------------------
+st.markdown("#### Where the roles are")
+
+by_country = run_df(
     f"""
-    with ranked as (
-        select company_name, count(*) as postings
-        from marts.FT_JOB_POSTING
-        where company_name is not null
-        group by 1 order by postings desc limit 15
-    )
     select
-        f.company_name,
-        {ui.SPONSORSHIP_SQL} as sponsorship,
-        count(*) as postings
-    from marts.FT_JOB_POSTING f
-    join ranked r on r.company_name = f.company_name
-    group by 1, 2
+        country_code,
+        count(*)                                              as open_roles,
+        count(distinct company_name)                          as companies,
+        count(*) filter (where english_sufficient)            as english_ok,
+        count(*) filter (where is_enriched)                   as llm_read
+    from marts.FT_JOB_POSTING
+    where {SCOPE}
+    group by 1 order by open_roles desc
     """
 )
-ui.show(ui.sponsorship_bar(comp, "company_name", "postings", value_title="postings"))
+by_country["market"] = by_country["country_code"].map(ui.market_label)
+# Share of the *read* postings, not of all of them: dividing by unread rows
+# would report a language finding for postings nobody has read.
+by_country["english_share"] = (by_country["english_ok"] / by_country["llm_read"]).fillna(0)
 
-left, right = st.columns(2, gap="large")
-with left:
-    st.markdown("##### Postings by source")
-    src = run_df(
-        "select source, count(*) as postings from marts.FT_JOB_POSTING group by 1 order by 2 desc"
+c1, c2 = st.columns([3, 2], gap="large")
+with c1:
+    ui.show(ui.hbar(by_country, "market", "open_roles", value_title="open roles"))
+with c2:
+    ui.table(
+        by_country[["market", "open_roles", "companies", "english_share"]],
+        column_config={
+            "market": st.column_config.TextColumn("Market"),
+            "open_roles": st.column_config.NumberColumn("Roles"),
+            "companies": st.column_config.NumberColumn("Companies"),
+            "english_share": st.column_config.ProgressColumn(
+                "English is enough",
+                format="percent",
+                min_value=0.0,
+                max_value=1.0,
+                help=(
+                    "Of the postings the LLM has read in this market, the share where "
+                    "English alone is enough to do the job. The single most useful "
+                    "number here if you don't speak the local language."
+                ),
+            ),
+        },
     )
-    ui.show(ui.hbar(src, "source", "postings", value_title="postings"))
-with right:
-    st.markdown("##### Jobs by market")
-    loc = run_df(
-        "select country_code, count(*) as n from marts.FT_JOB_POSTING group by 1 order by n desc"
-    )
-    loc["market"] = loc["country_code"].map(ui.market_label)
-    ui.show(ui.hbar(loc, "market", "n", value_title="postings"))
 
-# --- temporal (needs accumulated daily snapshots) --------------------------
+top = by_country.iloc[0] if not by_country.empty else None
+if top is not None:
+    st.caption(
+        f"**{top['market']} leads on volume** with {int(top['open_roles']):,} open roles. "
+        "Volume and language are different questions though — compare the "
+        "*English is enough* column before reading a big number as an opportunity."
+    )
+
 st.divider()
-st.markdown("##### Over time")
+
+# --- 2 · which stack -------------------------------------------------------
+st.markdown("#### Which stacks are hiring")
+st.caption(
+    "Extracted from the posting text by the LLM, so this covers the share of roles "
+    "it has read so far — a sample of the market, not a census."
+)
+
+stacks = run_df(
+    f"""
+    select tech, count(*) as roles from (
+        select unnest(technologies) as tech
+        from marts.FT_JOB_POSTING where {SCOPE}
+    ) group by 1 order by roles desc limit 15
+    """
+)
+if stacks.empty:
+    st.info("No technologies extracted yet — run `make enrich`.")
+else:
+    s1, s2 = st.columns([2, 3], gap="large")
+    with s1:
+        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title="open roles"))
+    with s2:
+        # Six series is the most a shared colour legend stays readable with.
+        leaders = stacks.head(6)["tech"].tolist()
+        placeholders = ", ".join("?" for _ in leaders)
+        stack_trend = run_df(
+            f"""
+            select s.date_key, t.tech, count(distinct s.content_hash) as roles
+            from marts.FT_JOB_SNAPSHOT_DAILY s
+            join (
+                select content_hash, unnest(technologies) as tech
+                from marts.FT_JOB_POSTING
+            ) t on t.content_hash = s.content_hash
+            where s.is_target_role and t.tech in ({placeholders})
+            group by 1, 2 order by 1
+            """,
+            tuple(leaders),
+        )
+        st.markdown("###### Demand for the leading stacks, day by day")
+        if stack_trend["date_key"].nunique() < 2:
+            st.info("Needs at least two snapshot days.")
+        else:
+            ui.show(
+                alt.Chart(stack_trend)
+                .mark_line(strokeWidth=2)
+                .encode(
+                    x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+                    y=alt.Y("roles:Q", title="open roles", axis=alt.Axis(grid=True)),
+                    color=alt.Color("tech:N", title=None, legend=alt.Legend(columns=3)),
+                    tooltip=[
+                        alt.Tooltip("date_key:T", title="day"),
+                        alt.Tooltip("tech:N", title="stack"),
+                        alt.Tooltip("roles:Q", title="open roles"),
+                    ],
+                )
+                .properties(height=300)
+            )
+
+st.divider()
+
+# --- 3 · which direction ---------------------------------------------------
+st.markdown("#### How the market moves")
 require_marts(
     "marts.FT_JOB_SNAPSHOT_DAILY",
     missing="Run the pipeline on a few different days to accumulate daily snapshots.",
@@ -71,16 +163,24 @@ require_marts(
 )
 
 daily = run_df(
-    "select date_key, count(*) as active_postings "
-    "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key order by date_key"
+    """
+    select date_key, count(*) as open_roles
+    from marts.FT_JOB_SNAPSHOT_DAILY
+    where is_target_role
+    group by date_key order by date_key
+    """
 )
 if len(daily) < 2:
     st.info(
         f"Only {len(daily)} snapshot day so far — trends appear once the pipeline "
-        "has run on multiple days (`make ingest-all` daily)."
+        "has run on several days."
     )
 else:
-    line = (
+    st.caption(
+        f"{len(daily)} days on record. Each point is how many data roles were visible "
+        "on the boards that day, so a dip is roles being filled faster than posted."
+    )
+    ui.show(
         alt.Chart(daily)
         .mark_area(
             line={"color": ui.PRIMARY, "strokeWidth": 2},
@@ -99,61 +199,55 @@ else:
         )
         .encode(
             x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
-            y=alt.Y("active_postings:Q", title="active postings", axis=alt.Axis(grid=True)),
+            y=alt.Y("open_roles:Q", title="open data roles", axis=alt.Axis(grid=True)),
             tooltip=[
                 alt.Tooltip("date_key:T", title="day"),
-                alt.Tooltip("active_postings:Q", title="active"),
+                alt.Tooltip("open_roles:Q", title="open roles"),
             ],
         )
-        .properties(height=260)
+        .properties(height=240)
     )
-    ui.show(line)
 
-    t1, t2 = st.columns(2, gap="large")
-    with t1:
-        by_market = run_df(
-            "select date_key, country_code, count(*) as n "
-            "from marts.FT_JOB_SNAPSHOT_DAILY group by 1, 2 order by date_key"
+    market_trend = run_df(
+        """
+        select date_key, country_code, count(*) as open_roles
+        from marts.FT_JOB_SNAPSHOT_DAILY
+        where is_target_role
+        group by 1, 2 order by date_key
+        """
+    )
+    market_trend["market"] = market_trend["country_code"].map(ui.market_label)
+    st.markdown("###### By country")
+    # No point markers: five series over 60+ days turned the lines into a
+    # stipple where the trend used to be.
+    ui.show(
+        alt.Chart(market_trend)
+        .mark_line(strokeWidth=2)
+        .encode(
+            x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
+            y=alt.Y("open_roles:Q", title="open data roles", axis=alt.Axis(grid=True)),
+            color=alt.Color("market:N", title=None, legend=alt.Legend(columns=3)),
+            tooltip=[
+                alt.Tooltip("date_key:T", title="day"),
+                "market:N",
+                alt.Tooltip("open_roles:Q", title="open roles"),
+            ],
         )
-        by_market["market"] = by_market["country_code"].map(ui.market_label)
-        st.markdown("##### Active postings by market over time")
-        ui.show(
-            alt.Chart(by_market)
-            .mark_line(strokeWidth=2, point=True)
-            .encode(
-                x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
-                y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                # Half-width chart with five series: let the legend wrap instead of
-                # clipping the last label.
-                color=alt.Color("market:N", title=None, legend=alt.Legend(columns=2)),
-                tooltip=[
-                    alt.Tooltip("date_key:T", title="day"),
-                    "market:N",
-                    alt.Tooltip("n:Q", title="active"),
-                ],
-            )
-            .properties(height=260)
-        )
-    with t2:
-        by_source = run_df(
-            "select date_key, source, count(*) as n "
-            "from marts.FT_JOB_SNAPSHOT_DAILY group by date_key, source order by date_key"
-        )
-        st.markdown("##### Active postings by source over time")
-        ui.show(
-            alt.Chart(by_source)
-            .mark_line(strokeWidth=2, point=True)
-            .encode(
-                x=alt.X("date_key:T", title=None, axis=alt.Axis(grid=False)),
-                y=alt.Y("n:Q", title="active postings", axis=alt.Axis(grid=True)),
-                color=alt.Color("source:N", title=None, legend=alt.Legend(columns=2)),
-                tooltip=[
-                    alt.Tooltip("date_key:T", title="day"),
-                    "source:N",
-                    alt.Tooltip("n:Q", title="active"),
-                ],
-            )
-            .properties(height=260)
-        )
+        .properties(height=280)
+    )
+
+st.divider()
+
+# --- 4 · who -------------------------------------------------------------
+st.markdown("#### Who is hiring most")
+companies = run_df(
+    f"""
+    select company_name, count(*) as open_roles
+    from marts.FT_JOB_POSTING
+    where {SCOPE} and company_name is not null
+    group by 1 order by open_roles desc limit 12
+    """
+)
+ui.show(ui.hbar(companies, "company_name", "open_roles", value_title="open roles"))
 
 ui.page_footer()

@@ -2,9 +2,18 @@
 -- This is what the append-only raw event log buys us — postings appearing /
 -- disappearing over time, time-to-fill, and trend lines.
 --
--- Modeled as a full table for clarity; switch to incremental (insert new
--- scraped_date partitions) once volume grows:
---   {{ config(materialized='incremental', unique_key='snapshot_key') }}
+-- Materialized as a full table, per the marts default in dbt_project.yml. At
+-- ~62k rows it rebuilds in about a second, and rebuilding is what keeps a
+-- column added here from being invisible in production.
+--
+-- This header used to carry a commented-out dbt config suggesting incremental
+-- materialization "once volume grows". It was not inert: Jinja is rendered
+-- before the SQL is ever parsed, so a config call inside a -- comment still
+-- configures the model. This table really was incremental, and because
+-- on_schema_change defaults to ignore, adding is_target_role here left
+-- production missing the column while every local build passed. If incremental
+-- is ever wanted, configure it explicitly at the top of the file and set
+-- on_schema_change; do not leave a config in a comment.
 
 with observations as (
     select
@@ -59,7 +68,11 @@ select
     d.title,
     (d.scraped_date = l.first_seen_date)                   as is_first_seen,
     (d.scraped_date = l.last_seen_date)                    as is_last_seen,
-    date_diff('day', l.first_seen_date, d.scraped_date)    as days_since_first_seen
+    date_diff('day', l.first_seen_date, d.scraped_date)    as days_since_first_seen,
+
+    -- Same title-based test as the current-state fact, so a trend chart and the
+    -- list it is meant to explain cannot disagree about what counts as a data role.
+    {{ jmi_is_target_role('d.title') }}                    as is_target_role
 from daily d
 join lifespan l
     on d.source = l.source

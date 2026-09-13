@@ -19,26 +19,33 @@ import streamlit as st
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
 
-ui.configure_page("NL Visa Audit")
+ui.configure_page("Visa sponsorship — Netherlands")
 ui.page_header(
-    title="🛂 NL Visa Audit",
+    title="🛂 Visa sponsorship — Netherlands",
     subtitle=(
-        "Jobs at companies that can **legally sponsor** a relocation to the Netherlands — "
-        "cross-referenced against the official IND register, each match verifiable by KvK "
-        "number. Deterministic: no LLM involved."
+        "One country, one question: which employers are **legally allowed** to sponsor a "
+        "work visa? Answered from the Dutch government's own register, not by a model."
     ),
 )
 
-with st.expander("What are IND and KvK? (plain-language)"):
+st.info(
+    "**Two reasons this page is narrower than the rest of the app.** It covers only the "
+    "Netherlands, because the Netherlands is the only one of the tracked countries that "
+    "publishes a machine-readable register of authorised sponsors. And it only matters if "
+    "you would need a visa — **with an EU passport you can skip it entirely.**\n\n"
+    "It is kept because it is the clearest example in the project of a signal you can "
+    "verify yourself: every match below carries a company registry number you can look up.",
+    icon="🧭",
+)
+
+with st.expander("What are IND and KvK?"):
     st.markdown(
         """
 - **IND** is the Dutch immigration service. It publishes the official list of employers
-  that are allowed to sponsor a work visa for non-EU hires.
-- **KvK** is the Dutch chamber-of-commerce registry number — the equivalent of a Spanish
-  CIF/NIF. Showing it proves the match is the *actual registered company*, not just a
-  name that looks similar. Click any KvK link below to see the company on the public registry.
-- **If you're an EU citizen you don't need any of this** — you have the right to work in
-  NL already. This page exists for non-EU users and as the app's auditable-data showcase.
+  allowed to sponsor a work visa for a non-EU hire.
+- **KvK** is the Dutch chamber-of-commerce number — the local equivalent of a Spanish
+  CIF/NIF. Showing it proves the match is the *actual registered company* and not just a
+  similar-looking name. Every KvK below links to the public registry.
 """
     )
 
@@ -66,7 +73,8 @@ rates["sponsor_rate"] = (rates["sponsors"] / rates["companies"]).fillna(0)
 # board can sponsor, which does not depend on which roles they advertise.
 
 r1, r2 = st.columns(2)
-rate_rows = list(rates.sort_values("corpus", ascending=False).iterrows())[:2]
+# Dutch corpus first: it is the one this page is about.
+rate_rows = list(rates.sort_values("corpus").iterrows())[:2]
 for col, (_, r) in zip((r1, r2), rate_rows, strict=False):
     col.metric(
         f"Sponsor rate — {r['corpus']}",
@@ -74,8 +82,9 @@ for col, (_, r) in zip((r1, r2), rate_rows, strict=False):
         help=f"{int(r['sponsors'])} of {int(r['companies'])} companies are on the IND register.",
     )
 st.caption(
-    "The gap is the point: remote-first boards barely overlap with the register, the "
-    "NL local corpus does. The deterministic check finds sponsors the LLM never could."
+    "The gap is the point: remote-first boards barely overlap with the register while the "
+    "Dutch corpus does — so a register match finds sponsors that reading job text never "
+    "would. Rates cover every employer in each corpus, not only the data roles."
 )
 
 st.divider()
@@ -130,19 +139,17 @@ df = run_df(
 )
 
 sponsor_rows = df[df["is_recognised_sponsor"]]
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Matching postings", f"{len(df):,}")
+m1, m2, m3 = st.columns(3)
+# "Matching postings" and "At recognised sponsors" used to sit side by side and
+# showed the same number whenever the sponsors-only toggle was on — which is its
+# default. Two metrics, one fact, and it read as a bug.
+m1.metric(
+    "Open roles listed",
+    f"{len(df):,}",
+    help="After the filters above. Closed postings are never listed on this page.",
+)
 m2.metric("At recognised sponsors", f"{len(sponsor_rows):,}")
 m3.metric("Distinct sponsor companies", f"{sponsor_rows['company_name'].nunique():,}")
-m4.metric(
-    "Not yet classified by the LLM",
-    f"{int((~df['is_enriched'].fillna(False)).sum()):,}",
-    help=(
-        "These postings are awaiting enrichment within the free daily quota. "
-        "Missing is **not** the same as negative — the register match above is "
-        "unaffected either way."
-    ),
-)
 
 if not sponsor_rows.empty:
     st.markdown("##### Recognised sponsors with the most open roles")

@@ -222,9 +222,9 @@ with links:
 
 sig1, sig2 = st.columns(2, gap="large")
 with sig1:
-    st.markdown("##### 🗣️ Can you work there in English?")
+    st.markdown("##### 🗣️ Can you do this job in English?")
     if not row["is_enriched"]:
-        st.markdown("_Not yet classified._ Coverage accumulates daily within the free LLM quota.")
+        st.markdown("_Not read yet._")
     else:
         if pd.isna(row["english_sufficient"]):
             st.markdown("The text doesn't say which language the job needs.")
@@ -251,18 +251,12 @@ with sig1:
                 f"[check it on the public registry](https://www.kvk.nl/zoeken/?source=all&q={kvk})"
             )
     else:
-        st.caption(
-            "Not on the Dutch sponsor list. EU citizens don't need this — it only matters "
-            "if you'd need a work visa."
-        )
+        st.caption("Not on the Dutch sponsor register — only relevant if you'd need a visa.")
 with sig2:
     st.markdown("##### 🧠 What the LLM read in the text")
     if not row["is_enriched"]:
-        st.warning("**Not yet classified** — the LLM has not read this posting.")
-        st.caption(
-            "Absence of evidence, not evidence of absence: this is *not* a finding of "
-            "'no sponsorship'. The register match on the left is unaffected."
-        )
+        st.warning("**Not read yet** — no stack, seniority or language for this one.")
+        st.caption("Not read is not the same as nothing found. It reaches the queue daily.")
     else:
         st.markdown(f"**{ui.VISA_LABELS.get(row['visa_status'], row['visa_status'])}**")
         if pd.notna(row["visa_confidence"]):

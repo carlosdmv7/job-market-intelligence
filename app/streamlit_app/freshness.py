@@ -52,24 +52,37 @@ def _warehouse_facts() -> dict[str, Any]:
     row = run_df(
         """
         select
-            count(*)                            as postings,
-            count(*) filter (where is_enriched)  as enriched,
-            max(last_seen_at)                    as last_run
+            count(*) filter (where is_target_role and is_active)   as open_roles,
+            count(*) filter (where is_target_role and is_active
+                             and len(technologies) > 0)            as with_stack,
+            count(distinct company_name) filter
+                (where is_target_role and is_active)               as companies,
+            max(last_seen_at)                                      as last_run
         from marts.FT_JOB_POSTING
         """
     ).iloc[0]
-    postings = int(row.postings)
+    # Deliberately *not* count(*) over the whole table. The warehouse holds
+    # 12.7k rows, most of them closed roles and off-target jobs kept for
+    # history, so a corpus-wide coverage ratio reported 8% and read as "this
+    # barely works". Measured against what the app actually shows, the same
+    # pipeline is at a third. The denominator was the misleading part.
+    open_roles = int(row.open_roles)
     return {
-        "postings": postings,
-        "enriched": int(row.enriched),
-        "coverage": (int(row.enriched) / postings) if postings else 0.0,
+        "open_roles": open_roles,
+        "with_stack": int(row.with_stack),
+        "companies": int(row.companies),
+        "stack_coverage": (int(row.with_stack) / open_roles) if open_roles else 0.0,
         "last_run": row.last_run,
     }
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _seed_facts() -> dict[str, Any]:
-    """Sponsor count + refresh date from the committed seed and its sidecar."""
+def sponsor_seed_facts() -> dict[str, Any]:
+    """Sponsor count + refresh date from the committed seed and its sidecar.
+
+    Public because How It Works renders it: engineering provenance belongs on the
+    page that exists to show the machinery, not in the strip on top of every page.
+    """
     meta: dict[str, Any] = {}
     if _SEED_META.exists():
         try:
@@ -85,7 +98,7 @@ def _seed_facts() -> dict[str, Any]:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _dbt_facts() -> dict[str, Any]:
+def dbt_run_facts() -> dict[str, Any]:
     """The last recorded pipeline run.
 
     Local dev has the real dbt artifact; a deployed app has only the warehouse,
@@ -138,50 +151,35 @@ def header_facts() -> list[Fact]:
                 help="Newest `last_seen_at` in the marts. The pipeline runs daily at 07:15 Amsterdam.",
             )
         )
-        facts.append(Fact("postings in warehouse", f"{wh['postings']:,}"))
         facts.append(
             Fact(
-                "LLM enrichment coverage",
-                f"{wh['coverage']:.0%}",
-                "warn" if wh["coverage"] < 0.5 else "good",
+                "open data roles",
+                f"{wh['open_roles']:,}",
                 help=(
-                    "Share of postings the classifier has read. Coverage is capped by "
-                    "the Gemini free tier (a measured 20 requests/day/model) and "
-                    "accumulates, data roles first. The "
-                    "remaining postings are **not yet classified** — that is not the "
-                    "same as 'no sponsorship'."
+                    "Data, analytics and ML roles still visible on their source board. "
+                    "Closed ones are kept for the trend charts but excluded here."
+                ),
+            )
+        )
+        facts.append(Fact("companies hiring", f"{wh['companies']:,}"))
+        facts.append(
+            Fact(
+                "with tech stack read",
+                f"{wh['stack_coverage']:.0%}",
+                "warn" if wh["stack_coverage"] < 0.5 else "good",
+                help=(
+                    "Share of open data roles whose technologies the LLM has extracted — "
+                    "the field that powers stack search and CV matching. Capped by the "
+                    "Gemini free tier (a measured 20 requests/day/model), so it grows "
+                    "daily. Unread is **not** the same as 'no match'."
                 ),
             )
         )
     else:
         facts.append(Fact("warehouse", "unreachable", "bad"))
 
-    seed = _seed_facts()
-    if seed.get("sponsors"):
-        refreshed = seed.get("refreshed_at")
-        label = "recognised sponsors in seed"
-        if refreshed:
-            label += f" (seed {refreshed})"
-        facts.append(
-            Fact(
-                label,
-                f"{int(seed['sponsors']):,}",
-                help="The IND register, scraped to a dbt seed. IND republishes it monthly.",
-            )
-        )
-
-    dbt = _dbt_facts()
-    if dbt.get("tests_total"):
-        passed, total = int(dbt["tests_passed"]), int(dbt["tests_total"])
-        facts.append(
-            Fact(
-                "dbt tests passing",
-                f"{passed}/{total}",
-                "good" if passed == total else "bad",
-                help="From the last recorded `dbt build` — not a hardcoded count.",
-            )
-        )
-    else:
-        facts.append(Fact("dbt tests", "no run recorded", "warn"))
-
+    # The IND seed size and the dbt test tally used to sit here. Both are
+    # engineering provenance — proof the thing is wired correctly — and neither
+    # helps someone deciding which job to open. They live on How It Works now,
+    # next to the rest of the evidence.
     return facts

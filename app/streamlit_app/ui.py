@@ -142,8 +142,8 @@ def visa_scale() -> alt.Scale:
     return alt.Scale(domain=VISA_ORDER, range=[VISA_COLORS[v] for v in VISA_ORDER])
 
 
-#: Markets with a dedicated local corpus (flag + name for display); anything
-#: else renders as its bare ISO code, NULL as Remote / global.
+#: Markets with a dedicated local corpus — the ones the scrapers query by name.
+#: Spelled out because "Netherlands" reads faster than "NL" in a legend.
 MARKETS = {
     "NL": "🇳🇱 Netherlands",
     "SE": "🇸🇪 Sweden",
@@ -152,14 +152,32 @@ MARKETS = {
 }
 
 
+def flag(country_code: str) -> str:
+    """An ISO-3166 alpha-2 code as its flag emoji.
+
+    Derived rather than tabulated: the two regional-indicator codepoints for a
+    country's letters *are* its flag, so every valid code gets a flag without a
+    lookup table that silently omits whichever country the boards surface next.
+    """
+    code = country_code.strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code)
+
+
 def market_label(country_code: str | None) -> str:
+    """Display name for a market: flag plus a human name wherever possible."""
     # `x != x` catches float NaN but *raises* on pd.NA, which DuckDB returns
     # for some nullable dtypes — so go through pd.isna instead.
     import pandas as pd
 
     if country_code is None or (pd.api.types.is_scalar(country_code) and pd.isna(country_code)):
         return "🌍 Remote / global"
-    return MARKETS.get(country_code, country_code)
+    code = str(country_code)
+    if code in MARKETS:
+        return MARKETS[code]
+    emoji = flag(code)
+    return f"{emoji} {code}" if emoji else code
 
 
 def table(df: pd.DataFrame, **kwargs) -> None:
@@ -355,13 +373,25 @@ def demo_notice() -> None:
     """
     from streamlit_app.db import is_demo
 
-    if is_demo():
-        st.info(
-            "**Demo mode** — no warehouse configured, so this is a committed sample "
-            "of 2,000 postings frozen at export time, not live data. The full app "
-            "reads ~12,500 postings from MotherDuck, refreshed daily.",
-            icon="📦",
-        )
+    if not is_demo():
+        return
+    # Counted, not quoted. This banner's whole job is to stop a frozen sample
+    # being read as live data, so a hardcoded row count that drifts from the
+    # committed parquet would undermine the one claim it exists to make.
+    from streamlit_app.db import run_df
+
+    try:
+        n = int(run_df("select count(*) as n from marts.FT_JOB_POSTING").iloc[0]["n"])
+        size = f"{n:,} postings"
+    except Exception:
+        size = "a sample of postings"
+    st.info(
+        f"**Demo mode** — no warehouse configured, so this is a committed sample of "
+        f"{size} frozen at export time, not live data. It is weighted toward open data "
+        "roles so every page has something real to show; the live app reads the full "
+        "corpus from MotherDuck, refreshed daily.",
+        icon="📦",
+    )
 
 
 def page_footer() -> None:

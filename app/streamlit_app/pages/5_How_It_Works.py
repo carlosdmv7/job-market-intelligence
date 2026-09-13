@@ -18,6 +18,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
+from streamlit_app.freshness import dbt_run_facts, sponsor_seed_facts
 
 from jmi_core.settings import get_settings
 from jmi_enrichment.prompts import SYSTEM_PROMPT as ENRICHMENT_PROMPT
@@ -39,30 +40,92 @@ ui.page_header(
 )
 
 # --- the daily pipeline ------------------------------------------------------
+dbt_run = dbt_run_facts()
+_tests = (
+    f"{int(dbt_run['tests_passed'])}/{int(dbt_run['tests_total'])}"
+    if dbt_run.get("tests_total")
+    else "every"
+)
+
 st.markdown("#### 1 · A daily pipeline, at 0€")
 st.markdown(
-    "Every morning (07:15 Amsterdam) a GitHub Actions cron runs the full "
-    "pipeline — the same Prefect-instrumented flows a paid worker would run: "
-    "ingest → LLM enrichment → `dbt build`, and 45 data tests must pass, every day."
+    "Every morning at 07:15 Amsterdam time, a GitHub Actions cron runs the whole thing: "
+    f"collect postings → have an LLM read them → rebuild the tables → **{_tests} data "
+    "tests must pass**. Nothing is hosted, nothing is paid for."
 )
-with st.expander("Show the pipeline diagram"):
+
+st.graphviz_chart(
+    """
+digraph pipeline {
+  rankdir=LR;
+  bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10,
+        color="#E4D9C4", fillcolor="#FDFAF4", fontcolor="#274C56", margin="0.14,0.09"];
+  edge [color="#A8501F", arrowsize=0.6, penwidth=1.1];
+
+  subgraph cluster_src {
+    label="1 · Collect  (free APIs, daily)"; fontname="Helvetica"; fontsize=9;
+    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    adzuna [label="Adzuna\nNL · DE · ES"];
+    jobtech [label="JobTech\nSE"];
+    boards [label="Remote boards\nRemotive · Arbeitnow · RemoteOK"];
+  }
+
+  raw [label="raw.raw_job_postings\nappend-only log", fillcolor="#F5EFE3"];
+
+  subgraph cluster_llm {
+    label="2 · Read  (LLM, free tier)"; fontname="Helvetica"; fontsize=9;
+    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    llm [label="Gemini\n10 postings per request\n20 requests/day"];
+    enr [label="raw.raw_job_enrichment\nstack · seniority · language", fillcolor="#F5EFE3"];
+  }
+
+  ind [label="IND sponsor register\nscraped monthly → dbt seed"];
+
+  subgraph cluster_dbt {
+    label="3 · Model  (dbt, tested)"; fontname="Helvetica"; fontsize=9;
+    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    staging [label="staging"];
+    dedup [label="de-duplicate\nby content hash"];
+    marts [label="marts\nFT_JOB_POSTING\nFT_JOB_SNAPSHOT_DAILY", fillcolor="#F5EFE3"];
+  }
+
+  app [label="This app", fillcolor="#F5EFE3", color="#D96C2C"];
+
+  adzuna -> raw; jobtech -> raw; boards -> raw;
+  raw -> llm [label="  not yet read", fontsize=8, fontcolor="#6B7B80"];
+  llm -> enr;
+  raw -> staging; enr -> staging; ind -> staging;
+  staging -> dedup -> marts -> app;
+}
+"""
+)
+
+with st.expander("Why postings are never overwritten"):
     st.markdown(
         """
-```
-Adzuna NL/DE/ES + JobTech SE + free remote boards ──► raw.raw_job_postings   (append-only)
-IND recognised-sponsor register (scraper → dbt seed)                          (monthly)
-LLM enrichment (Gemini free tier, 20 req/day/model) ─► raw.raw_job_enrichment
-dbt build: staging → dedup → marts  (45 data tests must pass, every day)
-```
+Each sighting of a posting is stored as a new **observation**, not an update. Seeing
+the same job again tomorrow adds a row rather than replacing one.
 
-Postings are **append-only observations**: re-seeing a posting on a new day feeds
-the daily snapshot mart (`FT_JOB_SNAPSHOT_DAILY`), which is where the trends
-come from. Cross-source duplicates collapse via a content hash in dbt.
+That is what makes two things possible: the trend charts (a posting's daily presence
+*is* the history) and the open/closed flag (a job we stop seeing has almost certainly
+been filled — boards delete rather than close). The cost is a bigger table; the benefit
+is that no question about the past becomes unanswerable later.
+
+Cross-source duplicates — the same job on three boards — collapse in dbt via a hash of
+its content, so a job posted widely is not counted three times.
 """
     )
 
 # --- the two signals ----------------------------------------------------------
-st.markdown("#### 2 · Two visa signals, deliberately separate")
+st.markdown("#### 2 · Two kinds of signal, never mixed")
+st.markdown(
+    "Some facts can be **looked up**; others can only be **read out of prose**. The app "
+    "keeps them apart everywhere, and labels which is which, because they fail "
+    "differently: a lookup is either right or missing, while a reading can be confidently "
+    "wrong. Visa sponsorship is the clearest example — it is the one field where both "
+    "kinds are available for the same question."
+)
 c1, c2 = st.columns(2, gap="large")
 with c1:
     st.markdown(
@@ -297,8 +360,41 @@ else:
         "been sampled into this checkout yet."
     )
 
+# --- provenance the other pages do not need ----------------------------------
+st.divider()
+st.markdown("#### 5 · Provenance")
+st.caption(
+    "These used to sit in the strip at the top of every page. They are proof the machinery "
+    "is wired correctly, which is a different job from helping you pick a posting — so they "
+    "live here now."
+)
+
+seed = sponsor_seed_facts()
+p1, p2, p3 = st.columns(3)
+p1.metric(
+    "IND register entries",
+    f"{int(seed['sponsors']):,}" if seed.get("sponsors") else "—",
+    help=(
+        "Employers on the Dutch recognised-sponsor list, scraped into a committed dbt "
+        "seed. IND republishes it monthly."
+    ),
+)
+p2.metric(
+    "Register snapshot",
+    str(seed.get("refreshed_at") or "—"),
+    help="When that seed was last refreshed from IND.",
+)
+p3.metric(
+    "dbt tests, last run",
+    _tests if dbt_run.get("tests_total") else "no run recorded",
+    help=(
+        "Read from the recorded `dbt build`, not hardcoded. A failing test fails the "
+        "pipeline, so the marts either passed or did not update."
+    ),
+)
+
 # --- agent guardrails ----------------------------------------------------------
-st.markdown("#### 5 · Ask the Data — guardrails")
+st.markdown("#### 6 · Ask the Data — guardrails")
 st.markdown(
     "The natural-language agent translates a question into **one** SQL query, "
     "which is validated before execution — and the generated SQL is always "
