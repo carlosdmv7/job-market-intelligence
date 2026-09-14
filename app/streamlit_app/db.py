@@ -14,6 +14,7 @@ against everywhere else, so :func:`is_demo` is surfaced in the UI.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import duckdb
@@ -57,6 +58,33 @@ def _demo_connection() -> duckdb.DuckDBPyConnection:
                 f"create or replace view {qualified} as select * from read_parquet('{path}')"
             )
     return conn
+
+
+def _bridge_streamlit_secrets() -> None:
+    """Copy Streamlit's secrets into the environment before Settings is read.
+
+    A deployed app has no ``.env``; on Streamlit Community Cloud the token lives
+    in the app's **Secrets** panel, which is outside the repo and therefore
+    never committed. Streamlit does also export top-level secrets as environment
+    variables, so this is usually redundant — but "usually" is a bad property
+    for the one thing standing between a public app and its data, and the
+    failure mode is a deployed app that silently falls back to demo mode.
+
+    Only fills gaps: a real environment variable always wins.
+    """
+    try:
+        secrets = st.secrets
+    except Exception:
+        return  # no secrets file — local runs use .env
+    for key in ("motherduck_token", "JMI_DUCKDB_DATABASE", "GEMINI_API_KEY"):
+        try:
+            value = secrets[key]
+        except Exception:
+            continue
+        os.environ.setdefault(key, str(value))
+
+
+_bridge_streamlit_secrets()
 
 
 @st.cache_resource
