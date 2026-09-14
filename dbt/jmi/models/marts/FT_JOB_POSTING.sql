@@ -45,6 +45,12 @@ select
     p.posted_at,
     p.valid_through,
     p.salary_raw,
+
+    -- What language the ad is *written* in. Deterministic, present on every row,
+    -- and a strong proxy for the question the enrichment answers on 21% of rows:
+    -- of the English-language postings the LLM has read, it calls English
+    -- sufficient 87% of the time, and of the Dutch-language ones, 0%.
+    p.detected_language,
     p.scraped_at                                                   as last_seen_at,
 
     -- Was this posting still on the board the last time we swept its source?

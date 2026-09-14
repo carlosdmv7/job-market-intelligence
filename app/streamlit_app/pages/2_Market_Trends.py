@@ -52,53 +52,40 @@ by_country = run_df(
         country_code,
         count(*)                                              as open_roles,
         count(distinct company_name)                          as companies,
-        count(*) filter (where english_sufficient)            as english_ok,
-        count(*) filter (where is_enriched)                   as llm_read
+        count(*) filter (where detected_language = 'en')      as written_in_english
     from marts.FT_JOB_POSTING
     where {SCOPE}
     group by 1 order by open_roles desc
     """
 )
 by_country["market"] = by_country["country_code"].map(ui.market_label)
-# Share of the *read* postings, not of all of them: dividing by unread rows
-# would report a language finding for postings nobody has read.
-by_country["english_share"] = by_country["english_ok"] / by_country["llm_read"]
-# ...and below a usable sample, report nothing rather than a number. Germany had
-# 206 open roles and zero read, so 0/0 filled to a confident-looking "0% English"
-# — an unmeasured value wearing a measurement's clothes. Spain's 67% came from
-# three postings and sat beside a 45% drawn from 168. Same bar as the eval's
-# headline metrics on How It Works.
-MIN_READ = 30
-by_country.loc[by_country["llm_read"] < MIN_READ, "english_share"] = None
+# The language the ad is *written* in, not the LLM's read of whether English
+# suffices. The LLM answer is better but exists for ~20% of rows, which meant
+# Germany reported "0% English" off zero reads and Spain "67%" off three. This
+# is deterministic and present on every row, so no sample guard is needed — and
+# it is a strong proxy: of English-language postings the LLM has read it calls
+# English sufficient 87% of the time, and of Dutch-language ones, never.
+by_country["english_share"] = by_country["written_in_english"] / by_country["open_roles"]
 
 c1, c2 = st.columns([3, 2], gap="large")
 with c1:
     ui.show(ui.hbar(by_country, "market", "open_roles", value_title=UNIT))
 with c2:
     ui.table(
-        by_country[["market", "open_roles", "companies", "llm_read", "english_share"]],
+        by_country[["market", "open_roles", "companies", "english_share"]],
         column_config={
             "market": st.column_config.TextColumn("Market"),
             "open_roles": st.column_config.NumberColumn("Roles", help=f"Counting {UNIT}."),
             "companies": st.column_config.NumberColumn("Companies"),
-            "llm_read": st.column_config.NumberColumn(
-                "Read",
-                help=(
-                    "How many of those roles the LLM has actually read. It is the "
-                    "denominator of the column beside it, so it is shown rather than "
-                    "assumed."
-                ),
-            ),
             "english_share": st.column_config.ProgressColumn(
-                "English is enough",
+                "Written in English",
                 format="percent",
                 min_value=0.0,
                 max_value=1.0,
                 help=(
-                    f"Of the roles read in this market, the share where English alone "
-                    f"is enough to do the job — the most useful number here if you "
-                    f"don't speak the local language. Blank below {MIN_READ} read: too "
-                    "thin a sample to report."
+                    "Share of this market's open roles whose ad is written in English. "
+                    "Detected on ingest, so it covers every posting — and it is the "
+                    "practical filter if you don't speak the local language."
                 ),
             ),
         },
@@ -108,9 +95,8 @@ top = by_country.iloc[0] if not by_country.empty else None
 if top is not None:
     st.caption(
         f"**{top['market']} leads on volume** with {int(top['open_roles']):,} {UNIT}. "
-        "Volume and language are different questions though — compare the "
-        "*English is enough* column before reading a big number as an opportunity, "
-        "and check *Read* before trusting it."
+        "Volume and language are different questions though — check the "
+        "*Written in English* column before reading a big number as an opportunity."
     )
 
 st.divider()
