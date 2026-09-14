@@ -79,7 +79,15 @@ data_roles_only = g2.toggle(
         "catalogue, so off also shows sales, finance and hospitality."
     ),
 )
-english_only = g3.toggle("English is enough", help="Per the LLM read of the posting.")
+english_only = g3.toggle(
+    "Written in English",
+    help=(
+        "The language the ad itself is written in — detected on ingest, so it "
+        "covers every posting rather than only the ones the LLM has read. Of the "
+        "English-language postings it has read, it calls English sufficient 87% "
+        "of the time; of the Dutch-language ones, never."
+    ),
+)
 enriched_only = g4.toggle("LLM-read only", help="Has a parsed stack, seniority and language.")
 sponsor_only = g5.toggle("IND sponsor only", help="Company on the Dutch visa-sponsor register.")
 
@@ -108,7 +116,7 @@ if data_roles_only:
 if sponsor_only:
     clauses.append("is_recognised_sponsor")
 if english_only:
-    clauses.append("english_sufficient")
+    clauses.append("detected_language = 'en'")
 if enriched_only:
     clauses.append("is_enriched")
 where = (" where " + " and ".join(clauses)) if clauses else ""
@@ -118,6 +126,7 @@ df = run_df(
     select
         job_posting_key, content_hash, title, company_name, country_code, location_raw,
         seniority, salary_raw, source, source_url, apply_url, posted_at, last_seen_at,
+        detected_language,
         is_active, days_since_seen,
         is_recognised_sponsor, sponsor_kvk, visa_status, visa_confidence, visa_evidence,
         visa_reasoning, is_enriched, english_sufficient, requires_local_language,
