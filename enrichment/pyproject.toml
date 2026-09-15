@@ -1,7 +1,7 @@
 [project]
 name = "jmi-enrichment"
 version = "0.1.0"
-description = "Pluggable LLM classification (Ollama/Gemini/Anthropic), salary parsing, dedup"
+description = "Pluggable LLM classification (Gemini/Ollama/Anthropic), salary parsing, dedup"
 requires-python = ">=3.11"
 dependencies = [
     "jmi-core",

@@ -1,11 +1,13 @@
 """Pluggable LLM providers for the enrichment classifier.
 
-Default is **Ollama** (local, 0€, no key). Gemini (free tier) and Anthropic
-(paid) are drop-in alternatives selected via ``settings.llm_provider``. Each
-provider takes a system + user prompt and a Pydantic schema, and returns the
-validated model plus token/cost usage.
+Default is **Gemini's free tier** — the only provider that runs in all three
+places this code executes (a laptop, a GitHub Actions runner, Streamlit
+Community Cloud). **Ollama** (local, no key, no quota) and **Anthropic** (paid)
+are drop-in alternatives selected via ``settings.llm_provider``. Each provider
+takes a system + user prompt and a Pydantic schema, and returns the validated
+model plus token/cost usage.
 
-Ollama and Gemini enforce JSON output mode and we validate against the schema
+Gemini and Ollama enforce JSON output mode and we validate against the schema
 client-side (lenient extraction); Anthropic uses native structured outputs.
 """
 

@@ -1,6 +1,6 @@
 """Provider-agnostic classifier: posting row -> JobEnrichment.
 
-Wraps an :class:`~jmi_enrichment.providers.LLMProvider` (Ollama by default).
+Wraps an :class:`~jmi_enrichment.providers.LLMProvider` (Gemini by default).
 The provider returns a validated :class:`LLMJobClassification` + usage; this
 class adds lineage/cost metadata and builds the full ``JobEnrichment``.
 """

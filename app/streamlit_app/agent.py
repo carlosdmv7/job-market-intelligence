@@ -1,7 +1,8 @@
 """Controlled text-to-SQL agent.
 
 A question → a single read-only DuckDB SELECT over the ``marts`` schema, via the
-same pluggable LLM provider as enrichment (Ollama by default → 0€). Safety is
+same pluggable LLM provider as enrichment (Gemini's free tier by default,
+so the whole app is 0€). Safety is
 layered: a strict prompt, a SQL guard (SELECT-only, no DDL/DML, single
 statement), an enforced LIMIT, and a read-only warehouse connection.
 
