@@ -135,8 +135,7 @@ df = run_df(
         visa_reasoning, is_enriched, english_sufficient, requires_local_language,
         working_languages, relocation_support, technologies, normalized_role,
         enrichment_model, enrichment_prompt_version, enriched_at, enrichment_confidence,
-        remote_policy, employment_type,
-        {ui.SPONSORSHIP_SQL} as sponsorship
+        remote_policy, employment_type
     from marts.FT_JOB_POSTING
     {where}
     order by {ORDERINGS[sort]}
@@ -153,13 +152,17 @@ st.caption(
 
 grid = ui.add_salary_eur(df)
 grid["market"] = grid["country_code"].map(ui.market_label)
+# The stack sits where the visa bucket used to. That column read "No
+# sponsorship evidence" on nearly every row — a constant, taking the widest
+# slot in a table whose job is to help you spot a role worth opening. The visa
+# signal is still filterable, sortable, and shown in full on the card.
 view = grid[
     [
         "title",
         "company_name",
         "market",
         "seniority",
-        "sponsorship",
+        "technologies",
         "english_sufficient",
         "salary_eur",
         "posted_at",
@@ -177,6 +180,9 @@ event = st.dataframe(
     height=420,
     column_config=ui.posting_columns(
         seniority=st.column_config.TextColumn("Seniority"),
+        technologies=st.column_config.ListColumn(
+            "Stack", help="Technologies the LLM found in the text. Empty = not read yet."
+        ),
         english_sufficient=st.column_config.CheckboxColumn(
             "EN ok",
             help="English alone is enough, per the LLM read. Empty = not yet classified.",

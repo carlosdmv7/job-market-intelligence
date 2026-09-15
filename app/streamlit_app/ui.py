@@ -178,33 +178,90 @@ def hbar(
 #: norm (260 working days, 8h) — stated here rather than buried in a lambda.
 _ANNUALISE = {"year": 1, "month": 12, "day": 260, "hour": 260 * 8}
 
+#: Euro-area countries. Adzuna quotes its per-country salaries as bare numbers
+#: — "58800-79200", no symbol — so the currency is carried by the endpoint the
+#: posting came from, not by the text. Without this the parser correctly
+#: refused every one of them, and the salary column was empty on all 818 open
+#: roles while 98 of them had a figure sitting in `salary_raw`.
+_EURO_COUNTRIES = frozenset(
+    {
+        "AT",
+        "BE",
+        "CY",
+        "DE",
+        "EE",
+        "ES",
+        "FI",
+        "FR",
+        "GR",
+        "HR",
+        "IE",
+        "IT",
+        "LT",
+        "LU",
+        "LV",
+        "MT",
+        "NL",
+        "PT",
+        "SI",
+        "SK",
+    }
+)
+
+#: Below this, an "annual" figure is not one. Adzuna occasionally passes
+#: through a monthly or hourly band without saying so ("960-1680"), and a
+#: posting rendered as "EUR 1,680/yr" is a wrong number, which is worse here
+#: than a blank one.
+_MIN_CREDIBLE_ANNUAL_EUR = 12_000
+
 
 def add_salary_eur(df: pd.DataFrame) -> pd.DataFrame:
     """Add ``salary_eur``: the raw salary text annualised, EUR only.
 
     Reuses the deterministic parser from ``jmi_enrichment`` (the same tested
     contract the pipeline documents) rather than re-implementing it in SQL.
-    Non-EUR postings are left null on purpose: converting them would mean
+
+    A figure counts as euros when the text says so, or when the text names no
+    currency at all and the posting is from a euro-area country — that second
+    case is inference, but the narrow kind: the number came from a per-country
+    endpoint that quotes in the local currency by construction. A posting in a
+    *named* other currency is left null, because converting it would mean
     inventing an FX rate and a rate date, and this app does not do that.
     """
     import pandas as pd
 
     from jmi_enrichment.salary import parse_salary
 
-    def _one(raw) -> float | None:
+    def _one(raw, country) -> float | None:
         if raw is None or (pd.api.types.is_scalar(raw) and pd.isna(raw)):
             return None
         parsed = parse_salary(str(raw))
-        if parsed is None or parsed.currency != "EUR":
+        if parsed is None:
+            return None
+        if parsed.currency is None:
+            code = None if country is None or pd.isna(country) else str(country).upper()
+            if code not in _EURO_COUNTRIES:
+                return None
+        elif parsed.currency != "EUR":
             return None
         amount = parsed.max_amount or parsed.min_amount
         if amount is None:
             return None
         factor = _ANNUALISE.get(str(parsed.period) if parsed.period else "year")
-        return round(amount * factor) if factor else None
+        if not factor:
+            return None
+        annual = round(amount * factor)
+        return annual if annual >= _MIN_CREDIBLE_ANNUAL_EUR else None
 
     out = df.copy()
-    parsed = out["salary_raw"].map(_one) if "salary_raw" in out else None
+    if "salary_raw" in out:
+        codes = out.get("country_code")
+        parsed = [
+            _one(raw, codes.iloc[i] if codes is not None else None)
+            for i, raw in enumerate(out["salary_raw"])
+        ]
+    else:
+        parsed = None
     # Force a float dtype: an object column of Nones renders as the literal
     # string "None" in st.dataframe, which reads as a value rather than as the
     # absence of one.
