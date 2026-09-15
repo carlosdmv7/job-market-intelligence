@@ -4,10 +4,12 @@
     "_comment": "Deliberately unset until the golden set has english labels. An empty floor means CI reports the score without gating on it, which is honest; a number invented before any measurement would be a guess wearing a threshold's clothes."
   },
   "visa": {
-    "_comment": "Frozen, not enforced as a goal any more. The corpus turned out to hold 1 explicit_yes in 730 enriched postings, so explicit_yes.precision is unscoreable rather than unmet. Kept as the record of what was once asserted.",
-    "accuracy": 0.7,
-    "macro_f1": 0.45,
-    "explicit_no.recall": 0.5,
-    "explicit_yes.precision": 0.6
+    "_comment": "Retired, not deleted. The corpus turned out to hold 1 explicit_yes in 730 enriched postings, so explicit_yes.precision is unscoreable rather than unmet (ADR 0007). The floor that was once asserted is recorded under _retired_floor where it documents history instead of gating a build: leaving the numbers as live keys would have made `make evals TARGET=visa` fail on a metric nobody intends to meet again.",
+    "_retired_floor": {
+      "accuracy": 0.7,
+      "macro_f1": 0.45,
+      "explicit_no.recall": 0.5,
+      "explicit_yes.precision": 0.6
+    }
   }
 }

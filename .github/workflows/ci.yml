@@ -59,10 +59,11 @@ jobs:
       # recorded production responses, so a red job means the prompt or the
       # code changed — never that the model had a bad morning.
       #
-      # While the golden set is still being labelled this prints "nothing to
-      # score" and passes. Once it is labelled, add --require-labels so an
-      # accidentally emptied golden set fails the build instead of skipping it.
-      - name: Score the visa classifier against the golden set
+      # Scores the default target (english-sufficiency — see jmi_evals.targets).
+      # While that target is still being labelled this prints "nothing to score"
+      # and passes. Once it is labelled, add --require-labels so an accidentally
+      # emptied golden set fails the build instead of skipping it.
+      - name: Score the classifier against the golden set
         run: uv run python -m jmi_evals.runner --provider replay --check
 
       - name: Upload the eval report
