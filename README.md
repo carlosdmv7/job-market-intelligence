@@ -4,37 +4,47 @@
 [![Daily pipeline](https://github.com/carlosdmv7/job-market-intelligence/actions/workflows/pipeline.yml/badge.svg)](https://github.com/carlosdmv7/job-market-intelligence/actions/workflows/pipeline.yml)
 
 An end-to-end **data-engineering + analytics-engineering + LLM** project that
-answers one question daily: **which open data roles across the EU match my
-stack?**
+answers one question every morning: **which open data roles in the EU are asking
+for my stack?**
 
-It ingests postings from five free job APIs, has an LLM read each one for its
-tech stack, seniority and working language, models the result dimensionally with
-dbt, and serves it through a 7-page Streamlit app — with stack-overlap CV
-scoring, a guard-railed natural-language **"Ask the Data"** agent, and a
-classifier measured against a hand-labelled golden set rather than trusted.
+It ingests postings from five free job APIs, has an LLM read each one for the
+technologies it names, its seniority and its working language, models the result
+dimensionally with dbt, and serves it through a seven-page Streamlit app — with
+stack-overlap CV scoring, a guard-railed natural-language **"Ask the Data"**
+agent, and a classifier that is measured against a hand-labelled golden set
+rather than trusted.
 
-Coverage is honest about itself: a posting the LLM has not read yet says so
-everywhere, and a posting that has left its source board is marked closed rather
-than shown as if you could still apply.
+Two rules run through all of it: **a posting the LLM has not read yet says so**
+everywhere instead of being reported as a negative finding, and **a posting that
+has left its board is marked closed** instead of being offered as if you could
+still apply.
 
 **Live app:** [job-market-intelligence-carlosdmv7.streamlit.app](https://job-market-intelligence-carlosdmv7.streamlit.app/) · **Runs at 0€** end to end (MotherDuck free tier,
-Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
-[ADR 0005](docs/adr/0005-zero-cost-stack.md)).
+Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
+[ADR 0005](docs/adr/0005-zero-cost-stack.md) and [ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)).
 
 [![The Overview page: open data roles per country, the stacks being hired for, and live coverage](docs/img/home.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/)
 
 <details>
-<summary><b>More screens</b> — Market Trends, Ask the Data, How It Works, visa showcase</summary>
+<summary><b>More screens</b> — Find Jobs, My Fit, Market Trends, Ask the Data, How It Works, the visa showcase</summary>
 
-**Market Trends** — which countries hire, which stacks they ask for, and how both move across 60+ days of daily snapshots.
+**Find Jobs** — every open posting as a filterable row; select one for the full card, which leads with the stack, the seniority and whether English alone is enough.
 
-![Market Trends: open roles per country with English-sufficiency, leading stacks over time, daily snapshots](docs/img/market-trends.png)
+![Find Jobs: the filter row, a grid showing each posting's extracted stack, and the open posting card](docs/img/find-jobs.png)
 
-**Ask the Data** — natural language in, guard-railed read-only SQL out.
+**My Fit** — your CV against every open role, free and instant: the share of each posting's stack you already cover, what you have, what you lack.
+
+![My Fit: detected skills as chips, then every open role ranked by stack overlap with matched and missing technologies](docs/img/my-fit.png)
+
+**Market Trends** — which countries hire, how often their ads are written in English, which stacks they ask for, and how all of it moves across 60+ days of daily snapshots.
+
+![Market Trends: open roles per country with the share written in English, leading stacks over time, daily snapshots](docs/img/market-trends.png)
+
+**Ask the Data** — natural language in, guard-railed read-only SQL out, always shown before it runs.
 
 ![Ask the Data: question box and example prompts, with the live provider and model shown](docs/img/ask-the-data.png)
 
-**How It Works** — the real prompt, live coverage, and the classifier's eval scores.
+**How It Works** — the pipeline diagram, live coverage, the real system prompt, and the classifier's eval scores.
 
 ![How It Works: the pipeline diagram, the deterministic-vs-model signal split, the real system prompt, and the eval harness](docs/img/how-it-works.png)
 
@@ -47,72 +57,91 @@ Gemini/Ollama, free job APIs, GitHub Actions as the scheduler — see
 ## The differentiating feature: signals you can audit, and coverage that admits its gaps
 
 Most "AI job board" projects pipe postings through an LLM and present whatever
-comes back as fact. Two disciplines here instead.
+comes back as fact. Three disciplines here instead.
 
-**Facts that can be looked up are never inferred.** Where a question has an
-authoritative source, the project uses it and shows you the receipt; the LLM is
-reserved for what only exists as prose. Visa sponsorship is the one field where
-both are available for the same question, so it is the clearest demonstration —
-and it is treated as a showcase, not as the product:
+### 1. Absence is never reported as a finding
 
-1. **Deterministic (primary):** every posting's company is cross-referenced
-   against the official **IND register of recognised sponsors** — the ~12,800
-   Dutch employers legally allowed to sponsor a highly-skilled-migrant visa
+Enrichment is capped by a free tier at a measured **20 requests/day/model**, so
+partial coverage is the permanent normal state. Every surface labels it: a
+posting the LLM has not read reads as **"not yet classified"**, never as "no
+match". Conflating the two would break the one thing the tool is for.
+
+The quota is counted in *requests*, not tokens, so ten postings ride in each
+one — the same free budget reads **200 postings a day instead of 20**. Each
+response echoes the index of the posting it answers and is matched by that
+index, never by position: a short or reordered reply would otherwise attach one
+job's stack to another, silently and undetectably.
+
+### 2. A filled role is not an open one
+
+Job boards delete filled roles rather than closing them, so "days since we last
+saw it" is the only liveness signal available. It becomes an `is_active` flag,
+measured against the corpus's **newest observation** rather than
+`current_date` — so a stalled pipeline cannot mark the whole market closed on a
+calendar technicality. Closed roles are kept for the trends and excluded from
+every list. Before this existed, 1,331 of 2,755 data roles had not been seen in
+three weeks and were being presented as current.
+
+### 3. Facts that can be looked up are never inferred
+
+Where a question has an authoritative source, the project uses it and shows the
+receipt; the LLM is reserved for what only exists as prose. **Visa sponsorship
+is the one field where both are available for the same question**, which makes
+it the clearest demonstration — and it is treated as a showcase, not as the
+product ([ADR 0007](docs/adr/0007-fit-first-and-batched-enrichment.md)):
+
+1. **Deterministic (primary):** every company is cross-referenced against the
+   official **IND register of recognised sponsors** — the ~12,800 Dutch
+   employers legally allowed to sponsor a highly-skilled-migrant visa
    ([scraper](scrapers/jmi_scrapers/ind_sponsors.py) → dbt seed →
    [normalized join](dbt/jmi/macros/jmi_normalize_company.sql) applied
-   identically to both sides). A match is **auditable**: it carries the
-   company's KvK (Chamber of Commerce) number, so every flag can be verified
-   against a public register. No hallucinations possible.
+   identically to both sides). A match carries the company's KvK number, so
+   every flag is verifiable against a public register. No hallucinations
+   possible.
 2. **LLM (secondary):** the posting *text* is classified into a visa enum with
    confidence + verbatim evidence ([ADR 0003](docs/adr/0003-visa-enum-classification.md)),
    and that classifier is **measured against a hand-labelled golden set**
    ([ADR 0006](docs/adr/0006-llm-evaluation.md)) rather than trusted.
-
-A posting the LLM has not read yet reads as **"not yet classified"** everywhere
-in the app — never as "no sponsorship". Enrichment is quota-bound and
-accumulates daily, so missing evidence is the normal state for most rows;
-conflating it with negative evidence would break the one thing this tool is
-for.
 
 Measured on this corpus: **~3%** of companies on remote-first boards are
 recognised sponsors against **~34%** on the Dutch local corpus — a gap a model
 reading job text would never find, and one that holds for postings the LLM has
 never seen.
 
-**Absence is never reported as a finding.** Two failure modes the project
-refuses: an unread posting shown as a negative result, and a filled role shown
-as if you could still apply to it. Enrichment is capped by a free tier at a
-measured 20 requests/day/model (batched 10 postings per request), so partial
-coverage is the permanent normal state — every surface labels it. And because
-boards delete filled roles instead of closing them, "days since we last saw it"
-becomes an `is_active` flag, with closed roles kept for the trends and excluded
-from the lists.
+**Why the visa feature is a showcase and not the headline.** It was the original
+flagship. The measurement retired it: across 730 enriched postings the
+classifier's own output was `unclear` 583 times and `explicit_yes` **once**. A
+class that rare cannot be scored — and the person using the tool is an EU
+citizen who never needs sponsorship. The feature is kept because it is the most
+auditable component in the repo; it is simply not what the app is *for*. The
+full reasoning, with the numbers, is in ADR 0007.
 
 ## The app: seven pages
 
 | Page | What it answers |
 |---|---|
 | **Overview** | How many data roles are open right now, in which countries, for which stacks |
-| **Find Jobs** | Every open posting as a filterable card: market, stack, seniority, parsed salary, working language |
-| **My Fit** | Your CV against every open role — free stack-overlap ranking, then one LLM call on the posting you pick |
-| **Market Trends** | Country comparison incl. how often English alone suffices, leading stacks day by day, 60+ days of snapshots |
+| **Find Jobs** | Every open posting as a filterable row — market, stack, seniority, salary, working language — and a card that leads with fit |
+| **My Fit** | Your CV against every open role: free stack-overlap ranking, then one LLM call on the posting you pick |
+| **Market Trends** | Country comparison incl. how often the ads are written in English, leading stacks day by day, 60+ days of snapshots |
 | **Ask the Data** | Natural language in, guard-railed read-only SQL out, with the generated SQL always shown |
-| **How It Works** | The pipeline diagram, the real system prompt, live coverage, and the classifier's eval scores |
-| **Visa sponsorship (NL)** | The auditable-data showcase: IND register cross-reference, KvK receipts, per-posting evidence |
+| **How It Works** | The pipeline diagram, live coverage, the real system prompt, the classifier's eval scores |
+| **Visa signal (NL)** | The auditable-data showcase: IND register cross-reference, KvK receipts, per-posting evidence |
 
 **My Fit** is deliberately two-tier, for the same reason the visa signal is:
 spend nothing where determinism suffices, spend the LLM where it earns its cost.
 
 1. **Free and instant** — the CV is intersected with the technology vocabulary
    the LLM *already* extracted from postings, and every enriched posting is
-   ranked by skill overlap. No API call, works across the whole corpus.
+   ranked by the share of its stack you cover. No API call, whole corpus.
 2. **One call, on demand** — the posting you select plus the CV go to the
    provider for a match percentage, honest gaps, and concrete CV edits.
 
 The CV lives in `st.session_state` only: never written to the warehouse, a
 file, or the logs, and discarded when the tab closes. The single deep-dive
 request is the only thing that ever leaves the session. Scoring logic is pure
-functions in [`cv_match.py`](app/streamlit_app/cv_match.py) — no Streamlit, unit-tested.
+functions in [`cv_match.py`](app/streamlit_app/cv_match.py) — no Streamlit,
+unit-tested.
 
 ## Architecture
 
@@ -185,12 +214,16 @@ is the deliberate 0€ substitute for an always-on orchestration worker; the
 flows carry Prefect `@flow` decorators, so they *would* report state and logs to
 Prefect Cloud if `PREFECT_API_URL`/`PREFECT_API_KEY` were set. They are not set:
 a hosted worker is not 0€, so the decorators are structure, not a live
-deployment.
-[`prefect.yaml`](orchestration/prefect.yaml) documents the worker-based
-production path and why it is not deployed (it needs a paid always-on machine).
+deployment. [`prefect.yaml`](orchestration/prefect.yaml) documents the
+worker-based production path and why it is not deployed.
 
-The daily cadence is also what feeds `FT_JOB_SNAPSHOT_DAILY`: posting
-lifetimes and market trends accumulate one snapshot per day.
+The run summary is appended to `meta.pipeline_run` **in the warehouse**, not to
+a committed file — the app reads its freshness strip from there. The earlier
+design distilled it into a JSON file, which meant two bot commits to `main`
+every single day, 58 of them in the first month, burying the human history.
+
+The daily cadence is also what feeds `FT_JOB_SNAPSHOT_DAILY`: posting lifetimes
+and market trends accumulate one snapshot per day.
 
 ## Honest status: production-grade vs demo
 
@@ -200,24 +233,24 @@ lifetimes and market trends accumulate one snapshot per day.
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
 | dbt medallion (dedup grain, quality tests) | Production-grade: 49 data tests incl. grain + invariant tests |
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
-| LLM enrichment | Working, quota-bound: Gemini free tier caps daily throughput; coverage accumulates via the daily run |
+| LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
-| LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds); the golden set is sampled but **labelling is in progress**, so no accuracy number is claimed yet |
+| LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds); 22 postings labelled for the visa target, and the English target that replaced it is **not labelled yet**, so no headline accuracy is claimed |
+| Containerisation | None. There was Docker Compose scaffolding; it could not be built or run here, so it was deleted rather than left as an untested claim ([ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)) |
 
 ## Repo layout (uv workspace monorepo)
 
 | Path | What |
 |---|---|
-| [libs/jmi_core](libs/jmi_core) | Canonical Pydantic contracts, settings, logging, MotherDuck client |
+| [libs/jmi_core](libs/jmi_core) | Canonical Pydantic contracts, settings, logging, MotherDuck client, the data-role vocabulary |
 | [scrapers](scrapers) | The 5 operational `httpx` scrapers + the IND sponsor register |
-| [enrichment](enrichment) | Pluggable LLM providers (Ollama/Gemini/Anthropic), salary parser, dedup |
+| [enrichment](enrichment) | Pluggable LLM providers (Gemini/Ollama/Anthropic), batched classifier, salary parser, dedup |
 | [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
-| [infra](infra) | Docker Compose (Ollama + app), Dockerfiles |
-| [docs](docs) | Architecture + ADRs |
+| [docs](docs) | Architecture + 8 ADRs |
 
 ## Quickstart
 
@@ -232,7 +265,7 @@ make app                      # http://localhost:8501, demo mode, no secrets
 For the real thing:
 
 ```bash
-cp .env.example .env          # set motherduck_token (the only required secret)
+cp .env.example .env          # motherduck_token is the only required secret
 uv sync --all-packages
 
 make warehouse-init           # raw/staging/marts schemas in MotherDuck
@@ -242,12 +275,20 @@ make ingest SOURCE=adzuna COUNTRY=de   # any Adzuna country (nl/es/de/fr/it/...)
 make sponsors-refresh         # IND register -> dbt seed (monthly)
 make enrich                   # LLM classification -> raw
 make dbt-build                # staging -> marts (+ 49 data tests)
-make evals                    # score the visa classifier (offline, replayed)
+make evals                    # score the classifier (offline, replayed)
 make app                      # Streamlit at http://localhost:8501
 ```
 
-LLM default is Gemini free tier; fully-local Ollama and Anthropic are one env
-var away (`JMI_LLM_PROVIDER`) — the classifier and the agent share the setting.
+The LLM default is the Gemini free tier — the only provider that runs on a
+laptop, a GitHub runner *and* Streamlit Community Cloud. Fully-local Ollama and
+Anthropic are one env var away (`JMI_LLM_PROVIDER`); the classifier and the
+agent share the setting.
+
+**Deploying the app** with live data needs no code change and no committed
+secret: on Streamlit Community Cloud, put `motherduck_token` and
+`JMI_DUCKDB_DATABASE` in the app's **Secrets** panel, which lives in that
+dashboard and never touches the repo. A **read-only** token is the right one for
+a public app. Without either, the app serves the committed sample and says so.
 
 ## Development
 
@@ -259,9 +300,9 @@ Branch naming, Conventional Commits (enforced by a `commit-msg` hook), and the
 PR flow: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 CI runs lint, type-check, tests, and `dbt parse` on every push. The unit suite
-covers the contracts, scrapers, enrichment (incl. provider wiring), the
-pipeline functions, and the SQL guard — all offline, no warehouse or LLM
-needed.
+covers the contracts, scrapers, enrichment (incl. provider wiring and batch
+index matching), the pipeline functions, the display helpers and the SQL guard —
+all offline, no warehouse or LLM needed.
 
 ## Key decisions (ADRs)
 
@@ -271,29 +312,37 @@ needed.
 4. [MotherDuck + dbt medallion](docs/adr/0004-warehouse-motherduck-medallion.md)
 5. [Zero-cost stack](docs/adr/0005-zero-cost-stack.md)
 6. [The golden set is the classifier's contract](docs/adr/0006-llm-evaluation.md)
+7. [Stack fit is the product; visa is a showcase — and batching the enrichment](docs/adr/0007-fit-first-and-batched-enrichment.md)
+8. [Gemini is the default provider; the container scaffolding is gone](docs/adr/0008-gemini-is-the-default-provider.md)
 
 ## Measuring the LLM, not just using it
 
-The visa classifier is scored against a hand-labelled golden set of ~200
-stratified postings ([`evals/`](evals)). CI replays **recorded** production
-responses — no key, no quota, no network — so a red eval means the prompt or
-the code changed, never that the model had a bad morning.
+The classifier is scored against a hand-labelled golden set of ~200 stratified
+postings ([`evals/`](evals)). CI replays **recorded** production responses — no
+key, no quota, no network — so a red eval means the prompt or the code changed,
+never that the model had a bad morning.
 
 ```bash
-make evals-sample     # stratified, deterministic, additive
-# label `visa_status_true` by hand
-make evals-record     # harvest responses the pipeline already stored
-make evals            # precision / recall / per-class F1 / confusion matrix
+make evals-sample                   # stratified, deterministic, additive
+make evals-label TARGET=english     # label by hand, keys 1-5
+make evals-record                   # harvest responses the pipeline already stored
+make evals TARGET=english           # precision / recall / per-class F1 / confusion
 ```
 
-The ground truth answers *"does this posting's text state or imply
-sponsorship?"* — never *"can this employer sponsor?"*, which the IND register
-already answers deterministically. Agreement between the two signals is
-reported as a **diagnostic, not a score**: a recognised sponsor whose ad never
-mentions visas is the ordinary case, and the number worth watching is the
-reverse — the LLM claiming sponsorship at an employer that legally cannot
-sponsor. Why the golden set is the contract:
-[ADR 0006](docs/adr/0006-llm-evaluation.md).
+The target is a parameter, because the field worth measuring changed when the
+product did. `--target visa` still scores the 22 visa labels already made; those
+numbers are what retired that feature and they stay in the repo as the record.
+The default is `english` — *can someone who doesn't speak the local language do
+this job?* — which splits close enough to evenly to be measurable and decides
+whether a posting is worth applying to.
+
+The ground truth answers what the posting's **text** says, never what the
+employer can legally do; that second question the IND register already answers
+deterministically. Agreement between the two signals is reported as a
+**diagnostic, not a score**: a recognised sponsor whose ad never mentions visas
+is the ordinary case, and the number worth watching is the reverse — the LLM
+claiming sponsorship at an employer that legally cannot sponsor. Why the golden
+set is the contract: [ADR 0006](docs/adr/0006-llm-evaluation.md).
 
 ## Tech stack
 

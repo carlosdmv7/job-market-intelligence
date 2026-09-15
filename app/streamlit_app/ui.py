@@ -16,16 +16,10 @@ import altair as alt
 import streamlit as st
 
 from streamlit_app.theme import (
-    AMBER_500,
-    BORDER,
-    INK,
-    INK_MUTED,
     PETROL_900,
     RUST_500,
     RUST_700,
-    SEQUENTIAL,
     SURFACE,
-    TEAL_500,
     TEAL_700,
     show,
 )
@@ -35,23 +29,20 @@ if TYPE_CHECKING:
 
 __all__ = [
     "MARKETS",
-    "SPONSORSHIP_COLORS",
-    "SPONSORSHIP_ORDER",
+    "SPONSORSHIP_SQL",
     "VISA_LABELS",
-    "VISA_ORDER",
+    "flag",
     "hbar",
     "market_label",
     "show",
-    "sponsorship_bucket",
     "table",
+    "visa_label",
 ]
 
 # Re-exported so pages import their colours from one place.
 PRIMARY = PETROL_900
 ACCENT = RUST_500
 GOOD = TEAL_700
-MUTED = INK_MUTED
-RAMP = SEQUENTIAL
 SURFACE_COLOR = SURFACE
 
 # --- the sponsorship roll-up ------------------------------------------------
@@ -63,14 +54,6 @@ RECOGNISED = "Recognised sponsor (IND)"
 LLM_ONLY = "LLM-positive only"
 UNCLASSIFIED = "Not yet classified"
 NO_EVIDENCE = "No sponsorship evidence"
-
-SPONSORSHIP_ORDER = [RECOGNISED, LLM_ONLY, UNCLASSIFIED, NO_EVIDENCE]
-SPONSORSHIP_COLORS = {
-    RECOGNISED: TEAL_700,
-    LLM_ONLY: TEAL_500,
-    UNCLASSIFIED: INK_MUTED,
-    NO_EVIDENCE: BORDER,
-}
 
 #: SQL that derives the bucket in the warehouse, so charts and tables agree
 #: with the agent and with each other. Kept here next to the labels it emits.
@@ -84,38 +67,9 @@ end
 """
 
 
-def sponsorship_scale() -> alt.Scale:
-    return alt.Scale(
-        domain=SPONSORSHIP_ORDER,
-        range=[SPONSORSHIP_COLORS[s] for s in SPONSORSHIP_ORDER],
-    )
-
-
-def sponsorship_bucket(row) -> str:
-    """Python mirror of :data:`SPONSORSHIP_SQL`, for already-fetched frames."""
-    import pandas as pd
-
-    if bool(row.get("is_recognised_sponsor")):
-        return RECOGNISED
-    if row.get("visa_status") in ("explicit_yes", "likely_yes"):
-        return LLM_ONLY
-    enriched = row.get("is_enriched")
-    if enriched is None or pd.isna(enriched) or not enriched:
-        return UNCLASSIFIED
-    return NO_EVIDENCE
-
-
 # --- the LLM's own 5-value read ---------------------------------------------
-# visa_status is ordered good -> bad; colour is a *secondary* cue (labels are
-# always on the axis), and the ramp is the brand's blue-orange diverging axis.
-VISA_ORDER = ["explicit_yes", "likely_yes", "unclear", "likely_no", "explicit_no"]
-VISA_COLORS = {
-    "explicit_yes": TEAL_700,
-    "likely_yes": TEAL_500,
-    "unclear": INK_MUTED,
-    "likely_no": AMBER_500,
-    "explicit_no": RUST_500,
-}
+# Ordered good -> bad. Rendered as text, never as a colour scale: the five
+# values only ever appear on a posting card, one at a time.
 VISA_LABELS = {
     "explicit_yes": "✅ Sponsorship offered (explicit)",
     "likely_yes": "🟢 Sponsorship likely",
@@ -136,10 +90,6 @@ def visa_label(status, *, is_enriched=True) -> str:
     if status is None or (pd.api.types.is_scalar(status) and pd.isna(status)):
         return NOT_CLASSIFIED_LABEL
     return VISA_LABELS.get(status, str(status))
-
-
-def visa_scale() -> alt.Scale:
-    return alt.Scale(domain=VISA_ORDER, range=[VISA_COLORS[v] for v in VISA_ORDER])
 
 
 #: Markets with a dedicated local corpus — the ones the scrapers query by name.
@@ -223,36 +173,46 @@ def hbar(
     )
 
 
-def sponsorship_bar(
-    df: pd.DataFrame,
-    label: str,
-    value: str,
-    *,
-    status: str = "sponsorship",
-    value_title: str | None = None,
-) -> alt.Chart:
-    """Magnitude bars split by the four-bucket sponsorship roll-up."""
-    return (
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelLimit=240)),
-            x=alt.X(f"{value}:Q", title=value_title, axis=alt.Axis(grid=True, tickCount=4)),
-            color=alt.Color(f"{status}:N", scale=sponsorship_scale(), title=None),
-            tooltip=[
-                alt.Tooltip(f"{label}:N", title=label.replace("_", " ")),
-                alt.Tooltip(f"{value}:Q", title=value_title or value.replace("_", " ")),
-                alt.Tooltip(f"{status}:N", title="signal"),
-            ],
-        )
-        .properties(height=max(160, df[label].nunique() * 30 + 12))
-    )
-
-
 # --- parsed salary ----------------------------------------------------------
 #: Periods -> multiplier to a yearly figure. Days/hours use the Dutch full-time
 #: norm (260 working days, 8h) — stated here rather than buried in a lambda.
 _ANNUALISE = {"year": 1, "month": 12, "day": 260, "hour": 260 * 8}
+
+#: Euro-area countries. Adzuna quotes its per-country salaries as bare numbers
+#: — "58800-79200", no symbol — so the currency is carried by the endpoint the
+#: posting came from, not by the text. Without this the parser correctly
+#: refused every one of them, and the salary column was empty on all 818 open
+#: roles while 98 of them had a figure sitting in `salary_raw`.
+_EURO_COUNTRIES = frozenset(
+    {
+        "AT",
+        "BE",
+        "CY",
+        "DE",
+        "EE",
+        "ES",
+        "FI",
+        "FR",
+        "GR",
+        "HR",
+        "IE",
+        "IT",
+        "LT",
+        "LU",
+        "LV",
+        "MT",
+        "NL",
+        "PT",
+        "SI",
+        "SK",
+    }
+)
+
+#: Below this, an "annual" figure is not one. Adzuna occasionally passes
+#: through a monthly or hourly band without saying so ("960-1680"), and a
+#: posting rendered as "EUR 1,680/yr" is a wrong number, which is worse here
+#: than a blank one.
+_MIN_CREDIBLE_ANNUAL_EUR = 12_000
 
 
 def add_salary_eur(df: pd.DataFrame) -> pd.DataFrame:
@@ -260,27 +220,48 @@ def add_salary_eur(df: pd.DataFrame) -> pd.DataFrame:
 
     Reuses the deterministic parser from ``jmi_enrichment`` (the same tested
     contract the pipeline documents) rather than re-implementing it in SQL.
-    Non-EUR postings are left null on purpose: converting them would mean
+
+    A figure counts as euros when the text says so, or when the text names no
+    currency at all and the posting is from a euro-area country — that second
+    case is inference, but the narrow kind: the number came from a per-country
+    endpoint that quotes in the local currency by construction. A posting in a
+    *named* other currency is left null, because converting it would mean
     inventing an FX rate and a rate date, and this app does not do that.
     """
     import pandas as pd
 
     from jmi_enrichment.salary import parse_salary
 
-    def _one(raw) -> float | None:
+    def _one(raw, country) -> float | None:
         if raw is None or (pd.api.types.is_scalar(raw) and pd.isna(raw)):
             return None
         parsed = parse_salary(str(raw))
-        if parsed is None or parsed.currency != "EUR":
+        if parsed is None:
+            return None
+        if parsed.currency is None:
+            code = None if country is None or pd.isna(country) else str(country).upper()
+            if code not in _EURO_COUNTRIES:
+                return None
+        elif parsed.currency != "EUR":
             return None
         amount = parsed.max_amount or parsed.min_amount
         if amount is None:
             return None
         factor = _ANNUALISE.get(str(parsed.period) if parsed.period else "year")
-        return round(amount * factor) if factor else None
+        if not factor:
+            return None
+        annual = round(amount * factor)
+        return annual if annual >= _MIN_CREDIBLE_ANNUAL_EUR else None
 
     out = df.copy()
-    parsed = out["salary_raw"].map(_one) if "salary_raw" in out else None
+    if "salary_raw" in out:
+        codes = out.get("country_code")
+        parsed = [
+            _one(raw, codes.iloc[i] if codes is not None else None)
+            for i, raw in enumerate(out["salary_raw"])
+        ]
+    else:
+        parsed = None
     # Force a float dtype: an object column of Nones renders as the literal
     # string "None" in st.dataframe, which reads as a value rather than as the
     # absence of one.
@@ -334,7 +315,6 @@ POSTINGS_ORDER = "is_recognised_sponsor desc, last_seen_at desc nulls last"
 
 # Keep a stable name for the link colour used in markdown callouts.
 LINK = RUST_700
-INK_COLOR = INK
 
 # --- page chrome ------------------------------------------------------------
 REPO_URL = "https://github.com/carlosdmv7/job-market-intelligence"

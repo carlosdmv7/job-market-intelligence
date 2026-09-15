@@ -1,6 +1,9 @@
 # ADR 0005 — Zero-cost stack: local LLM provider + free public job APIs
 
 **Status:** accepted (supersedes the Scrapfly/Anthropic defaults in the original plan)
+**Amended by:** [ADR 0008](0008-gemini-is-the-default-provider.md) — the provider
+interface stands, but the default moved from Ollama to Gemini's free tier: none
+of the three machines this code runs on can host a 7B model.
 
 ## Context
 Hard constraint: 0€ to run. The original design assumed Scrapfly (paid) for

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check ollama-pull ollama-up ollama-down ollama-status warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
+.PHONY: help install fmt lint type test check warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -26,21 +26,6 @@ test: ## Run the test suite
 
 check: lint type test ## Lint + type-check + test (run before pushing)
 
-ollama-pull: ## Pull the local LLM (set MODEL to override)
-	ollama pull $(or $(MODEL),qwen2.5:7b)
-
-ollama-up: ## Start the Ollama service (only while you need the local LLM)
-	sudo systemctl start ollama
-
-ollama-down: ## Unload the model from RAM and stop the Ollama service
-	-ollama stop $(or $(MODEL),qwen2.5:7b)
-	-sudo systemctl stop ollama
-
-ollama-status: ## Show service state, model loaded in RAM, and free memory
-	@echo -n "service: "; systemctl is-active ollama
-	@ollama ps 2>/dev/null || echo "(service down — nothing loaded)"
-	@free -h | awk 'NR<=2'
-
 warehouse-init: ## Create raw/staging/marts schemas + raw tables in MotherDuck
 	uv run python -m jmi_flows.warehouse_init
 
@@ -50,7 +35,7 @@ ingest: ## Run the ingestion flow for one source (SOURCE=remotive [COUNTRY=de])
 ingest-all: ## Ingest every free no-key source
 	@for s in remotive arbeitnow remoteok jobtech; do uv run python -m jmi_flows.ingest --source $$s; done
 
-ingest-nl: ## Ingest local NL jobs via Adzuna (needs ADZUNA_APP_ID/KEY) — the relocation corpus
+ingest-nl: ## Ingest local NL jobs via Adzuna (needs ADZUNA_APP_ID/KEY)
 	uv run python -m jmi_flows.ingest --source adzuna
 
 ingest-se: ## Ingest Sweden via JobTech/Platsbanken (free, no key)
@@ -80,17 +65,17 @@ demo-data: ## Re-export the committed demo sample the app falls back to (needs a
 evals-sample: ## Sample postings into the golden-set labelling template (SIZE=200)
 	uv run python -m jmi_evals.sample --size $(or $(SIZE),200)
 
-evals-label: ## Label the golden set by hand (keys 1-5; LIMIT=25 for a short sitting)
-	uv run python -m jmi_evals.label $(if $(LIMIT),--limit $(LIMIT),)
+evals-label: ## Label the golden set by hand (TARGET=english|visa, LIMIT=25 for a short sitting)
+	uv run python -m jmi_evals.label --target $(or $(TARGET),english) $(if $(LIMIT),--limit $(LIMIT),)
 
 evals-record: ## Harvest the model responses the pipeline already stored, for offline replay
 	uv run python -m jmi_evals.replay --record
 
-evals: ## Score the visa classifier against the golden set (offline, replayed)
-	uv run python -m jmi_evals.runner --provider replay --check
+evals: ## Score the classifier against the golden set (TARGET=english|visa, offline)
+	uv run python -m jmi_evals.runner --provider replay --target $(or $(TARGET),english) --check
 
 evals-live: ## Re-score by calling the real LLM (use after a prompt change, then re-record)
-	uv run python -m jmi_evals.runner --provider live
+	uv run python -m jmi_evals.runner --provider live --target $(or $(TARGET),english)
 
 app: ## Launch the Streamlit app
 	uv run streamlit run app/streamlit_app/Home.py

@@ -96,6 +96,20 @@ def test_ollama_provider_raises_on_bad_json(monkeypatch):
         OllamaProvider("m").classify(system="s", user="u", schema=LLMJobClassification)
 
 
+def test_default_provider_is_gemini():
+    """The default has to be a provider that runs where this code runs.
+
+    Pinned because it silently wasn't: the default said `ollama` while the
+    pipeline, CI and the deployed app all overrode it, and the one surface that
+    didn't (the app's live-configuration caption) advertised a provider it could
+    not reach. `_env_file=None` so a developer's own .env cannot mask a
+    regression here. See ADR 0008.
+    """
+    defaults = Settings(_env_file=None)
+    assert defaults.llm_provider == "gemini"
+    assert defaults.llm_model.startswith("gemini-")
+
+
 def test_get_provider_selection():
     assert isinstance(get_provider(Settings(llm_provider="ollama")), OllamaProvider)
     assert isinstance(

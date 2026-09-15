@@ -5,8 +5,8 @@ underlying tools (MotherDuck, optional cloud LLMs) pick them up too; app-level
 config is ``JMI_``-prefixed. Values come from the environment or a local
 ``.env`` file.
 
-The default stack is 0€: MotherDuck free tier + local Ollama + free public job
-APIs. No keys required beyond the MotherDuck token.
+The default stack is 0€: MotherDuck free tier, the Gemini free tier for the
+LLM, and free public job APIs.
 """
 
 from __future__ import annotations
@@ -27,7 +27,8 @@ class Settings(BaseSettings):
 
     # --- secrets (conventional env names) --------------------------------
     motherduck_token: str | None = Field(default=None, validation_alias="motherduck_token")
-    # Optional cloud LLM keys (only needed if you switch provider off Ollama).
+    # The key for the default provider. Absent = the LLM steps fail loudly;
+    # everything else (ingest, dbt, the app's non-LLM pages) still runs.
     gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
     # Min seconds between Gemini calls — proactively stays under the free-tier
     # requests-per-minute cap so we don't waste retries / drop postings.
@@ -44,18 +45,17 @@ class Settings(BaseSettings):
         default="md:job-market-intelligence", validation_alias="JMI_DUCKDB_DATABASE"
     )
 
-    # --- LLM enrichment (default: local Ollama, 0€) ----------------------
+    # --- LLM enrichment --------------------------------------------------
+    #: Gemini's free tier is the default because it is the only provider that
+    #: works in all three places this code runs: a laptop, a GitHub Actions
+    #: runner, and Streamlit Community Cloud. Ollama was the original default
+    #: and remains fully supported, but a local 7B model needs RAM that the
+    #: last two do not have — so it defaulted to a configuration that failed
+    #: everywhere it actually ran (ADR 0008).
     llm_provider: str = Field(
-        default="ollama", validation_alias="JMI_LLM_PROVIDER"
-    )  # ollama|gemini|anthropic
-    llm_model: str = Field(default="qwen2.5:7b", validation_alias="JMI_LLM_MODEL")
-    ollama_host: str = Field(default="http://localhost:11434", validation_alias="JMI_OLLAMA_HOST")
-    # Cap CPU threads so local inference doesn't peg the laptop (heat/throttle).
-    # 0 = let Ollama use every core; 6 ≈ the performance cores on a laptop chip.
-    ollama_num_thread: int = Field(default=6, validation_alias="JMI_OLLAMA_NUM_THREAD")
-    # How long Ollama keeps the model in RAM after a request: "0" unloads at once,
-    # "5m" keeps it warm across a batch, "-1" never unloads.
-    ollama_keep_alive: str = Field(default="5m", validation_alias="JMI_OLLAMA_KEEP_ALIVE")
+        default="gemini", validation_alias="JMI_LLM_PROVIDER"
+    )  # gemini|ollama|anthropic
+    llm_model: str = Field(default="gemini-2.5-flash-lite", validation_alias="JMI_LLM_MODEL")
     enrichment_prompt_version: str = Field(
         default="enrich/v2", validation_alias="JMI_ENRICHMENT_PROMPT_VERSION"
     )
@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     enrichment_postings_per_request: int = Field(
         default=10, ge=1, validation_alias="JMI_ENRICHMENT_POSTINGS_PER_REQUEST"
     )
+
+    # --- Ollama, for a fully-local run on a machine with the RAM for it ---
+    ollama_host: str = Field(default="http://localhost:11434", validation_alias="JMI_OLLAMA_HOST")
+    # Cap CPU threads so local inference doesn't peg the laptop (heat/throttle).
+    # 0 = let Ollama use every core; 6 ≈ the performance cores on a laptop chip.
+    ollama_num_thread: int = Field(default=6, validation_alias="JMI_OLLAMA_NUM_THREAD")
+    # How long Ollama keeps the model in RAM after a request: "0" unloads at once,
+    # "5m" keeps it warm across a batch, "-1" never unloads.
+    ollama_keep_alive: str = Field(default="5m", validation_alias="JMI_OLLAMA_KEEP_ALIVE")
 
     # --- scraping --------------------------------------------------------
     scrape_max_postings: int = Field(default=200, validation_alias="JMI_SCRAPE_MAX_POSTINGS")

@@ -75,15 +75,29 @@ def test_scores_a_perfect_replay(wired):
     assert report.agreement["llm_positive_confirmed_by_register"] == 1.0
 
 
-def test_a_regression_trips_the_committed_threshold(wired):
+def test_a_regression_trips_a_threshold(wired):
     golden = [_golden("sponsor", "explicit_yes"), _golden("refuses", "explicit_no")]
     # The model has started calling everything 'unclear'.
     wired(golden, [_recorded("sponsor", "unclear"), _recorded("refuses", "unclear")])
 
     report, _, _ = runner.run("replay", "visa")
     assert report.accuracy == 0.0
-    failures = runner.check_thresholds(report, runner.load_thresholds(target="visa"))
-    assert failures, "the committed thresholds must catch a total classifier failure"
+    floor = {"accuracy": 0.7, "explicit_no.recall": 0.5}
+    failures = runner.check_thresholds(report, floor)
+    assert failures, "a floor must catch a total classifier failure"
+
+
+def test_retired_thresholds_document_rather_than_gate():
+    """A metric nobody intends to meet again must not be able to fail a build.
+
+    The visa floor is kept as the record of what was once asserted (ADR 0007),
+    nested under a comment key so `load_thresholds` returns no live gate for it
+    — otherwise `make evals TARGET=visa` would go red forever on a class the
+    corpus contains once in 730 postings.
+    """
+    visa = runner.load_thresholds(target="visa")
+    assert not [k for k in visa if not k.startswith("_")]
+    assert visa["_retired_floor"]["explicit_yes.precision"] == 0.6
 
 
 def test_postings_without_a_recording_are_skipped_not_guessed(wired):

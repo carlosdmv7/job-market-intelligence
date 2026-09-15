@@ -118,8 +118,11 @@ ranked["market"] = ranked["country_code"].map(ui.market_label)
 
 st.markdown(f"##### Ranked matches — {len(ranked):,} open roles with a parsed stack")
 st.caption(
-    "**Score = the share of a posting's technologies your CV already covers.** Only open "
-    "roles whose stack the LLM has read can be ranked, so this list grows daily."
+    "**Score = the share of a posting's technologies your CV already covers.** Read the "
+    "score next to **Stack**: 100% of a two-technology posting is a weaker signal than "
+    "100% of an eight-technology one, so ties break toward the posting with more of its "
+    "stack named. Only open roles whose stack the LLM has read can be ranked, so this "
+    "list grows daily."
 )
 
 event = st.dataframe(
@@ -129,6 +132,7 @@ event = st.dataframe(
             "company_name",
             "market",
             "match_pct",
+            "n_techs",
             "matched",
             "missing",
             "english_sufficient",
@@ -146,6 +150,13 @@ event = st.dataframe(
         "market": st.column_config.TextColumn("Market"),
         "match_pct": st.column_config.ProgressColumn(
             "Match", format="percent", min_value=0.0, max_value=1.0
+        ),
+        "n_techs": st.column_config.NumberColumn(
+            "Stack",
+            help=(
+                "How many technologies the posting names. The denominator of the "
+                "match — a high score over a small stack says less."
+            ),
         ),
         "matched": st.column_config.ListColumn("You have"),
         "missing": st.column_config.ListColumn("You lack"),

@@ -12,7 +12,8 @@
  by GitHub Actions (.github/workflows/pipeline.yml) — no hosted worker
    ingest  ──────────────►  raw.raw_job_postings   (append-only event log)
    enrich  ──── LLM ─────►  raw.raw_job_enrichment (1 row per content_hash)
-            │        (Gemini free tier: 20 requests/day/model, 10 postings each)
+            │        (Gemini free tier: 20 requests/day/model x 10 postings per
+            │         request = ~200/day; queue is data roles only, freshest first)
             ▼
  IND recognised-sponsor register (~12.8k employers) ─► dbt seed
             │
@@ -26,7 +27,11 @@
             ▼
  Streamlit app (app/streamlit_app), top nav, entry point Home.py
    Overview · Find Jobs · My Fit (CV stack overlap) · Market Trends ·
-   Ask the Data (text-to-SQL agent) · How It Works · Visa sponsorship (NL)
+   Ask the Data (text-to-SQL agent) · How It Works · Visa signal (NL)
+            │
+            ▼
+ Run history ─► meta.pipeline_run (appended by the pipeline, read by the app's
+                freshness strip — never a committed status file)
 ```
 
 ## Layers & grain
@@ -56,6 +61,11 @@
   on any breaking change to either side.
 - raw/staging: lowercase snake_case. marts: `FT_`/`DT_` (the company convention).
 - Everything is a uv workspace member; `httpx`/`duckdb`/`structlog` are the only
-  heavy core deps. The LLM provider is pluggable (`jmi_enrichment.providers`).
+  heavy core deps. The LLM provider is pluggable (`jmi_enrichment.providers`),
+  defaulting to Gemini's free tier — the only one that runs on a laptop, a
+  GitHub runner and Streamlit Community Cloud alike (ADR 0008).
+- "Is this a data role?" has exactly one definition, `jmi_core.roles`, shared by
+  the scrapers, the enrichment queue and dbt (via the `jmi_is_target_role`
+  macro); `scrapers/tests/test_target_role_parity.py` keeps the two in step.
 
 See `adr/` for the decisions behind these.

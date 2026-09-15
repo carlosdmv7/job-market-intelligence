@@ -176,36 +176,51 @@ with st.expander("Why the prompt is designed this way"):
   the sentence that says so. That quote is displayed, not summarized.
 - **"Unknown" is a valid answer** — the rubric explicitly prefers `unknown`/null +
   low confidence over guessing.
-- **Free-tier aware** — the Gemini free tier allows a measured 20 requests/day
-  per model, so the batch is capped there rather than at a guess; a circuit
-  breaker stops the batch after 5 consecutive provider failures (a dead quota),
-  and results are upserted in chunks of 10 so an interrupted run loses almost
-  nothing. Coverage accumulates daily, NL first.
+- **Free-tier aware** — the quota is counted in *requests*, not tokens (a
+  measured 20/day/model), so ten postings ride in each one: the same budget
+  reads 200 postings a day instead of 20. Each response echoes the index of the
+  posting it answers and is matched by that index, never by position — a short
+  or reordered reply would otherwise attach one job's stack to another silently.
+  A circuit breaker stops the batch after 5 consecutive provider failures (a
+  dead quota), and results are upserted in chunks so an interrupted run loses
+  almost nothing. The queue is data roles only, freshest sighting first.
 """
     )
 
 # --- live coverage -------------------------------------------------------------
 require_marts("marts.FT_JOB_POSTING", missing="No marts yet — run the pipeline first.")
+# Open data roles, not every row ever collected. The warehouse keeps closed
+# postings and off-target jobs for the trend charts, and dividing by those
+# reported 8% coverage for a pipeline that had read a third of what the app
+# actually shows. The denominator was the misleading part, not the number.
 cov = run_df(
     """
     select
-        coalesce(country_code, 'Remote/global') as market,
-        count(*) as postings,
-        count(*) filter (where is_enriched) as enriched,
-        round(100.0 * count(*) filter (where is_enriched) / count(*), 1) as pct
+        coalesce(country_code, 'Remote/global')                    as market,
+        count(*)                                                   as open_roles,
+        count(*) filter (where is_enriched)                        as enriched,
+        round(100.0 * count(*) filter (where is_enriched)
+              / nullif(count(*), 0), 1)                            as pct
     from marts.FT_JOB_POSTING
-    group by 1 order by postings desc
+    where is_target_role and is_active
+    group by 1 order by open_roles desc
     """
 )
 st.markdown("##### Live enrichment coverage")
+st.caption(
+    "Open data roles only — the rows the app actually offers you. The warehouse also "
+    "holds closed postings and off-target jobs, kept for the trend charts; counting "
+    "those in the denominator is how this number once read 8% for a pipeline that had "
+    "read a third of what you can see."
+)
 st.dataframe(
     cov,
     width="stretch",
     hide_index=True,
     column_config={
         "market": st.column_config.TextColumn("Market"),
-        "postings": st.column_config.NumberColumn("Postings"),
-        "enriched": st.column_config.NumberColumn("LLM-enriched"),
+        "open_roles": st.column_config.NumberColumn("Open roles"),
+        "enriched": st.column_config.NumberColumn("LLM-read"),
         "pct": st.column_config.NumberColumn("Coverage %", format="%.1f%%"),
     },
 )
@@ -270,7 +285,7 @@ _target = (report or {}).get("target", "english")
 _headline = (report or {}).get("target_headline", "Classifier")
 labelled, total = _golden_progress(_target)
 
-with st.expander("Why this measures English-sufficiency and not visa sponsorship"):
+with st.expander("Why the headline metric moved from visa sponsorship to English"):
     st.markdown(
         """
 The harness was built around the visa field, because visa sponsorship was the
