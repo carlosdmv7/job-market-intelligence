@@ -27,6 +27,31 @@ def test_demo_facts_carry_the_columns_the_pages_select():
         ).fetchall()
     }
     # A sample with the wrong shape would fail at page load, not here, so pin
-    # the columns the app actually reads.
-    for needed in ("visa_status", "is_enriched", "is_recognised_sponsor", "country_code"):
+    # the columns the app actually reads. The posting card is the reason this
+    # list is long: it only renders once a row is selected, which AppTest
+    # cannot drive, so a missing column there would reach a user first.
+    for needed in (
+        "country_code",
+        "days_since_seen",
+        "detected_language",
+        "english_sufficient",
+        "enriched_at",
+        "enrichment_confidence",
+        "enrichment_model",
+        "enrichment_prompt_version",
+        "is_active",
+        "is_enriched",
+        "is_recognised_sponsor",
+        "is_target_role",
+        "normalized_role",
+        "relocation_support",
+        "seniority",
+        "sponsor_kvk",
+        "technologies",
+        "visa_confidence",
+        "visa_evidence",
+        "visa_reasoning",
+        "visa_status",
+        "working_languages",
+    ):
         assert needed in cols

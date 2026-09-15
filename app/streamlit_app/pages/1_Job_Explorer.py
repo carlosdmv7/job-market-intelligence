@@ -1,10 +1,13 @@
 """Find Jobs — filter every market, open any posting's full card.
 
-The card (ficha) is where the two visa signals become inspectable: the
-deterministic IND match (with its KvK number) and the LLM's read of the text
-(status, verbatim evidence, one-sentence reasoning, and which model/prompt
-produced it). Descriptions live in staging, so the card fetches them by
-content_hash on demand.
+The card leads with what decides whether to apply: the stack the role asks for,
+the seniority, and whether English alone is enough. The two visa signals — the
+deterministic IND register match with its KvK number, and the model's read of
+the text with its verbatim evidence — are inspectable underneath, where they
+are evidence of how the project treats signals rather than the headline.
+
+Descriptions live in staging, so the card fetches them by content_hash on
+demand rather than carrying every posting's full text through the grid query.
 """
 
 from __future__ import annotations
@@ -229,12 +232,36 @@ with links:
     if apply_url and apply_url != row["source_url"]:
         st.link_button("Apply ↗", apply_url, width="stretch")
 
-sig1, sig2 = st.columns(2, gap="large")
-with sig1:
-    st.markdown("##### 🗣️ Can you do this job in English?")
-    if not row["is_enriched"]:
-        st.markdown("_Not read yet._")
-    else:
+# The card leads with fit, because that is what the app is for. Everything the
+# LLM read about the *work* comes first; the visa cross-reference is real and
+# auditable but answers a question an EU passport already answers, so it sits
+# under a fold rather than beside the stack.
+if not row["is_enriched"]:
+    st.info(
+        "**The LLM has not read this posting yet** — no stack, seniority or working "
+        "language for it. Not read is not the same as nothing found: it is in the "
+        "queue, which clears roughly 200 postings a day.",
+        icon="⏳",
+    )
+else:
+    fit1, fit2 = st.columns(2, gap="large")
+    with fit1:
+        st.markdown("##### 🧰 The stack this role asks for")
+        techs_list = _items(row["technologies"])
+        if techs_list:
+            st.markdown(" ".join(f"`{t}`" for t in techs_list))
+        else:
+            st.caption("The LLM read this posting but found no named technologies in it.")
+        bits = [
+            f"**Role:** {_txt(row['normalized_role'])}" if _txt(row["normalized_role"]) else None,
+            f"**Seniority:** {_txt(row['seniority'])}" if _txt(row["seniority"]) else None,
+        ]
+        if any(bits):
+            st.markdown(" · ".join(b for b in bits if b))
+        st.page_link("pages/6_CV_Match.py", label="Score this stack against your CV", icon="🎯")
+
+    with fit2:
+        st.markdown("##### 🗣️ Can you do this job in English?")
         if pd.isna(row["english_sufficient"]):
             st.markdown("The text doesn't say which language the job needs.")
         elif row["english_sufficient"]:
@@ -246,48 +273,56 @@ with sig1:
             st.markdown("Working languages: " + ", ".join(f"`{lang}`" for lang in langs))
         if pd.notna(row["relocation_support"]) and row["relocation_support"]:
             st.markdown("📦 The posting mentions relocation support.")
-
-    st.markdown("##### 🏛️ Visa sponsorship (for non-EU candidates)")
-    if row["is_recognised_sponsor"]:
-        kvk = _txt(row["sponsor_kvk"])
-        st.success(
-            "**Recognised sponsor** — this company is on the Dutch government's (IND) "
-            "official list of employers allowed to sponsor a work visa."
+        st.caption(
+            f"The ad itself is written in `{_txt(row['detected_language']) or 'unknown'}` — "
+            "detected on ingest, independently of the model's read."
         )
-        if kvk:
-            st.markdown(
-                f"Company registry nº (KvK, the Dutch CIF) **{kvk}** — "
-                f"[check it on the public registry](https://www.kvk.nl/zoeken/?source=all&q={kvk})"
-            )
-    else:
-        st.caption("Not on the Dutch sponsor register — only relevant if you'd need a visa.")
-with sig2:
-    st.markdown("##### 🧠 What the LLM read in the text")
-    if not row["is_enriched"]:
-        st.warning("**Not read yet** — no stack, seniority or language for this one.")
-        st.caption("Not read is not the same as nothing found. It reaches the queue daily.")
-    else:
-        st.markdown(f"**{ui.VISA_LABELS.get(row['visa_status'], row['visa_status'])}**")
-        if pd.notna(row["visa_confidence"]):
-            st.progress(
-                float(row["visa_confidence"]),
-                text=f"visa confidence {row['visa_confidence']:.0%}",
-            )
-        if _txt(row["visa_reasoning"]):
-            st.markdown(f"**Why:** {_txt(row['visa_reasoning'])}")
-        if _txt(row["visa_evidence"]):
-            st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
-        provenance = (
-            f"model `{row['enrichment_model']}` · prompt `{row['enrichment_prompt_version']}` · "
-            f"enriched {row['enriched_at'].date() if pd.notna(row['enriched_at']) else '—'}"
-        )
-        if pd.notna(row["enrichment_confidence"]):
-            provenance += f" · overall confidence {row['enrichment_confidence']:.0%}"
-        st.caption(provenance)
 
-techs_list = _items(row["technologies"])
-if techs_list:
-    st.markdown("**Technologies:** " + " ".join(f"`{t}`" for t in techs_list))
+    provenance = (
+        f"model `{row['enrichment_model']}` · prompt `{row['enrichment_prompt_version']}` · "
+        f"read {row['enriched_at'].date() if pd.notna(row['enriched_at']) else '—'}"
+    )
+    if pd.notna(row["enrichment_confidence"]):
+        provenance += f" · overall confidence {row['enrichment_confidence']:.0%}"
+    st.caption(provenance)
+
+with st.expander("🛂 Visa sponsorship — only if you would need one"):
+    st.caption(
+        "Irrelevant with an EU passport. Kept because it is the one question this "
+        "project can answer two ways, and the two are shown side by side."
+    )
+    v1, v2 = st.columns(2, gap="large")
+    with v1:
+        st.markdown("**🏛️ The register says** (deterministic)")
+        if row["is_recognised_sponsor"]:
+            kvk = _txt(row["sponsor_kvk"])
+            st.success(
+                "**Recognised sponsor** — on the Dutch government's (IND) official list "
+                "of employers allowed to sponsor a work visa."
+            )
+            if kvk:
+                st.markdown(
+                    f"Company registry nº (KvK, the Dutch CIF) **{kvk}** — "
+                    "[check it on the public registry]"
+                    f"(https://www.kvk.nl/zoeken/?source=all&q={kvk})"
+                )
+        else:
+            st.markdown("Not on the Dutch sponsor register.")
+    with v2:
+        st.markdown("**🧠 The text says** (the model's read)")
+        if not row["is_enriched"]:
+            st.markdown("_Not read yet._")
+        else:
+            st.markdown(ui.visa_label(row["visa_status"], is_enriched=True))
+            if pd.notna(row["visa_confidence"]):
+                st.progress(
+                    float(row["visa_confidence"]),
+                    text=f"confidence {row['visa_confidence']:.0%}",
+                )
+            if _txt(row["visa_reasoning"]):
+                st.markdown(f"**Why:** {_txt(row['visa_reasoning'])}")
+            if _txt(row["visa_evidence"]):
+                st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
 
 with st.expander("Full description (as scraped)"):
     desc = run_df(

@@ -16,16 +16,10 @@ import altair as alt
 import streamlit as st
 
 from streamlit_app.theme import (
-    AMBER_500,
-    BORDER,
-    INK,
-    INK_MUTED,
     PETROL_900,
     RUST_500,
     RUST_700,
-    SEQUENTIAL,
     SURFACE,
-    TEAL_500,
     TEAL_700,
     show,
 )
@@ -35,23 +29,20 @@ if TYPE_CHECKING:
 
 __all__ = [
     "MARKETS",
-    "SPONSORSHIP_COLORS",
-    "SPONSORSHIP_ORDER",
+    "SPONSORSHIP_SQL",
     "VISA_LABELS",
-    "VISA_ORDER",
+    "flag",
     "hbar",
     "market_label",
     "show",
-    "sponsorship_bucket",
     "table",
+    "visa_label",
 ]
 
 # Re-exported so pages import their colours from one place.
 PRIMARY = PETROL_900
 ACCENT = RUST_500
 GOOD = TEAL_700
-MUTED = INK_MUTED
-RAMP = SEQUENTIAL
 SURFACE_COLOR = SURFACE
 
 # --- the sponsorship roll-up ------------------------------------------------
@@ -63,14 +54,6 @@ RECOGNISED = "Recognised sponsor (IND)"
 LLM_ONLY = "LLM-positive only"
 UNCLASSIFIED = "Not yet classified"
 NO_EVIDENCE = "No sponsorship evidence"
-
-SPONSORSHIP_ORDER = [RECOGNISED, LLM_ONLY, UNCLASSIFIED, NO_EVIDENCE]
-SPONSORSHIP_COLORS = {
-    RECOGNISED: TEAL_700,
-    LLM_ONLY: TEAL_500,
-    UNCLASSIFIED: INK_MUTED,
-    NO_EVIDENCE: BORDER,
-}
 
 #: SQL that derives the bucket in the warehouse, so charts and tables agree
 #: with the agent and with each other. Kept here next to the labels it emits.
@@ -84,38 +67,9 @@ end
 """
 
 
-def sponsorship_scale() -> alt.Scale:
-    return alt.Scale(
-        domain=SPONSORSHIP_ORDER,
-        range=[SPONSORSHIP_COLORS[s] for s in SPONSORSHIP_ORDER],
-    )
-
-
-def sponsorship_bucket(row) -> str:
-    """Python mirror of :data:`SPONSORSHIP_SQL`, for already-fetched frames."""
-    import pandas as pd
-
-    if bool(row.get("is_recognised_sponsor")):
-        return RECOGNISED
-    if row.get("visa_status") in ("explicit_yes", "likely_yes"):
-        return LLM_ONLY
-    enriched = row.get("is_enriched")
-    if enriched is None or pd.isna(enriched) or not enriched:
-        return UNCLASSIFIED
-    return NO_EVIDENCE
-
-
 # --- the LLM's own 5-value read ---------------------------------------------
-# visa_status is ordered good -> bad; colour is a *secondary* cue (labels are
-# always on the axis), and the ramp is the brand's blue-orange diverging axis.
-VISA_ORDER = ["explicit_yes", "likely_yes", "unclear", "likely_no", "explicit_no"]
-VISA_COLORS = {
-    "explicit_yes": TEAL_700,
-    "likely_yes": TEAL_500,
-    "unclear": INK_MUTED,
-    "likely_no": AMBER_500,
-    "explicit_no": RUST_500,
-}
+# Ordered good -> bad. Rendered as text, never as a colour scale: the five
+# values only ever appear on a posting card, one at a time.
 VISA_LABELS = {
     "explicit_yes": "✅ Sponsorship offered (explicit)",
     "likely_yes": "🟢 Sponsorship likely",
@@ -136,10 +90,6 @@ def visa_label(status, *, is_enriched=True) -> str:
     if status is None or (pd.api.types.is_scalar(status) and pd.isna(status)):
         return NOT_CLASSIFIED_LABEL
     return VISA_LABELS.get(status, str(status))
-
-
-def visa_scale() -> alt.Scale:
-    return alt.Scale(domain=VISA_ORDER, range=[VISA_COLORS[v] for v in VISA_ORDER])
 
 
 #: Markets with a dedicated local corpus — the ones the scrapers query by name.
@@ -220,32 +170,6 @@ def hbar(
             ],
         )
         .properties(height=h, title=title or "")
-    )
-
-
-def sponsorship_bar(
-    df: pd.DataFrame,
-    label: str,
-    value: str,
-    *,
-    status: str = "sponsorship",
-    value_title: str | None = None,
-) -> alt.Chart:
-    """Magnitude bars split by the four-bucket sponsorship roll-up."""
-    return (
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelLimit=240)),
-            x=alt.X(f"{value}:Q", title=value_title, axis=alt.Axis(grid=True, tickCount=4)),
-            color=alt.Color(f"{status}:N", scale=sponsorship_scale(), title=None),
-            tooltip=[
-                alt.Tooltip(f"{label}:N", title=label.replace("_", " ")),
-                alt.Tooltip(f"{value}:Q", title=value_title or value.replace("_", " ")),
-                alt.Tooltip(f"{status}:N", title="signal"),
-            ],
-        )
-        .properties(height=max(160, df[label].nunique() * 30 + 12))
     )
 
 
@@ -334,7 +258,6 @@ POSTINGS_ORDER = "is_recognised_sponsor desc, last_seen_at desc nulls last"
 
 # Keep a stable name for the link colour used in markdown callouts.
 LINK = RUST_700
-INK_COLOR = INK
 
 # --- page chrome ------------------------------------------------------------
 REPO_URL = "https://github.com/carlosdmv7/job-market-intelligence"
