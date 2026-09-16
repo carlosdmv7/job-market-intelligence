@@ -55,3 +55,51 @@ def test_demo_facts_carry_the_columns_the_pages_select():
         "working_languages",
     ):
         assert needed in cols
+
+
+def test_the_app_never_opens_a_writable_connection(monkeypatch):
+    """The read-only connection is guardrail #4, so it must not be optional.
+
+    MotherDuck's free plan issues read/write tokens only, which makes the
+    connection mode — not the token's scope — the thing standing between a
+    public text-to-SQL agent and production. MotherDuck enforces it server-side
+    (a CREATE over a read-only attachment is refused), but only if the app
+    actually asks for read-only. It used to retry with read_only=False on any
+    failure.
+    """
+    asked: list[bool] = []
+
+    class _FakeConn:
+        def execute(self, *_args, **_kwargs):
+            return self
+
+    class _FakeWarehouse:
+        def __init__(self, _database, *, read_only=False, motherduck_token=None):
+            asked.append(read_only)
+            self.conn = _FakeConn()
+
+    monkeypatch.setattr(db, "Warehouse", _FakeWarehouse)
+    db._live_connection.clear()
+    try:
+        assert db._live_connection() is not None
+    finally:
+        db._live_connection.clear()
+    assert asked == [True], f"the app asked for these read_only modes: {asked}"
+
+
+def test_an_unreachable_warehouse_falls_back_to_demo_not_to_write_access(monkeypatch):
+    asked: list[bool] = []
+
+    class _RefusingWarehouse:
+        def __init__(self, _database, *, read_only=False, motherduck_token=None):
+            asked.append(read_only)
+            raise RuntimeError("no network")
+
+    monkeypatch.setattr(db, "Warehouse", _RefusingWarehouse)
+    db._live_connection.clear()
+    try:
+        assert db._live_connection() is None
+    finally:
+        db._live_connection.clear()
+    # One attempt, read-only. Never a second, writable one.
+    assert asked == [True]

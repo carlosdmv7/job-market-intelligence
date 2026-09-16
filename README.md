@@ -235,8 +235,8 @@ and market trends accumulate one snapshot per day.
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
-| Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
-| LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds); 22 postings labelled for the visa target, and the English target that replaced it is **not labelled yet**, so no headline accuracy is claimed |
+| Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
+| LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds). 22 postings hand-labelled for the visa target — the measurement that retired that feature. **No headline accuracy is claimed** and none is planned: the question the app depends on is cross-checked against a deterministic signal at 100% coverage instead ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)) |
 | Containerisation | None. There was Docker Compose scaffolding; it could not be built or run here, so it was deleted rather than left as an untested claim ([ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)) |
 
 ## Repo layout (uv workspace monorepo)
@@ -250,7 +250,7 @@ and market trends accumulate one snapshot per day.
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
-| [docs](docs) | Architecture + 8 ADRs |
+| [docs](docs) | Architecture + 10 ADRs |
 
 ## Quickstart
 
@@ -287,8 +287,16 @@ agent share the setting.
 **Deploying the app** with live data needs no code change and no committed
 secret: on Streamlit Community Cloud, put `motherduck_token` and
 `JMI_DUCKDB_DATABASE` in the app's **Secrets** panel, which lives in that
-dashboard and never touches the repo. A **read-only** token is the right one for
-a public app. Without either, the app serves the committed sample and says so.
+dashboard and never touches the repo. Without either, the app serves the
+committed sample and says so.
+
+The token is a **read/write** one, because MotherDuck's free plan issues no
+other kind — so the app's safety deliberately does not rest on it. The
+connection is opened `read_only=True` and **MotherDuck enforces that
+server-side**: a write over a read-only attachment is refused by the server, not
+by a check in this code. There is no fallback to a writable connection; if
+read-only cannot be opened the app drops to the committed sample rather than
+quietly acquiring write access ([ADR 0009](docs/adr/0009-read-only-by-connection-not-by-token.md)).
 
 ## Development
 
@@ -314,6 +322,8 @@ all offline, no warehouse or LLM needed.
 6. [The golden set is the classifier's contract](docs/adr/0006-llm-evaluation.md)
 7. [Stack fit is the product; visa is a showcase — and batching the enrichment](docs/adr/0007-fit-first-and-batched-enrichment.md)
 8. [Gemini is the default provider; the container scaffolding is gone](docs/adr/0008-gemini-is-the-default-provider.md)
+9. [The app is read-only by connection, not by token](docs/adr/0009-read-only-by-connection-not-by-token.md)
+10. [Cross-check against a deterministic signal instead of hand labels](docs/adr/0010-cross-check-instead-of-hand-labels.md)
 
 ## Measuring the LLM, not just using it
 
@@ -323,18 +333,35 @@ key, no quota, no network — so a red eval means the prompt or the code changed
 never that the model had a bad morning.
 
 ```bash
-make evals-sample                   # stratified, deterministic, additive
-make evals-label TARGET=english     # label by hand, keys 1-5
-make evals-record                   # harvest responses the pipeline already stored
-make evals TARGET=english           # precision / recall / per-class F1 / confusion
+make evals-sample                # stratified, deterministic, additive
+make evals-label TARGET=visa     # label by hand, keys 1-5
+make evals-record                # harvest responses the pipeline already stored
+make evals TARGET=visa           # precision / recall / per-class F1 / confusion
 ```
 
 The target is a parameter, because the field worth measuring changed when the
 product did. `--target visa` still scores the 22 visa labels already made; those
 numbers are what retired that feature and they stay in the repo as the record.
-The default is `english` — *can someone who doesn't speak the local language do
-this job?* — which splits close enough to evenly to be measurable and decides
-whether a posting is worth applying to.
+
+**The English target is deliberately left unlabelled.** Hand labels are the
+expensive instrument, so they are spent only on questions a cheaper one cannot
+reach — and this question has a cheaper one. The language an ad is *written* in
+is detected deterministically on ingest, the classifier never sees it, and the
+two line up sharply enough to act on:
+
+| Ad written in | Postings read | Model says "English is enough" |
+|---|---|---|
+| English | 643 | 85% |
+| Dutch | 255 | **0.4%** (1 posting) |
+| Swedish | 72 | 10% |
+| German | 64 | 9% |
+
+That separation is evidence the model is reading rather than pattern-matching on
+job titles — and it is also why the app's language filter runs on the detected
+language, which is present on **100%** of postings, rather than on the model's
+read, which is present on the share the quota has reached. Scoring a field
+nothing filters by would buy a number, not a better tool
+([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)).
 
 The ground truth answers what the posting's **text** says, never what the
 employer can legally do; that second question the IND register already answers

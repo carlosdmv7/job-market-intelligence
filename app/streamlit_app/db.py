@@ -89,20 +89,32 @@ _bridge_streamlit_secrets()
 
 @st.cache_resource
 def _live_connection() -> duckdb.DuckDBPyConnection | None:
-    """The real warehouse, or ``None`` when it cannot be reached at all."""
+    """The real warehouse, read-only, or ``None`` when it cannot be reached.
+
+    **Read-only is not negotiable and there is no fallback.** This used to try
+    ``read_only=True`` and then retry with ``read_only=False`` on any failure,
+    on the theory that some MotherDuck setups dislike read-only connections.
+    They don't — a read-only connection to MotherDuck works and the *server*
+    enforces it, refusing a CREATE with "cannot execute statement of type
+    CREATE on a database attached in read-only mode". So the fallback protected
+    against nothing, and what it risked was everything: this app is public, it
+    serves a text-to-SQL agent, and MotherDuck's free plan issues read/write
+    tokens only. One transient error on the first attempt and a stranger's SQL
+    would have been running against production with write access, with the app
+    still claiming a read-only connection as its fourth guardrail.
+
+    Losing the connection entirely is the better failure: it lands in demo
+    mode, which says so on every page.
+    """
     s = get_settings()
-    for read_only in (True, False):  # some MotherDuck setups dislike read_only
-        try:
-            wh = Warehouse(
-                s.duckdb_database, read_only=read_only, motherduck_token=s.motherduck_token
-            )
-            # Connecting can succeed lazily; force a real round trip so a bad
-            # token fails here rather than on the first page that queries.
-            wh.conn.execute("select 1")
-            return wh.conn
-        except Exception:
-            continue
-    return None
+    try:
+        wh = Warehouse(s.duckdb_database, read_only=True, motherduck_token=s.motherduck_token)
+        # Connecting can succeed lazily; force a real round trip so a bad
+        # token fails here rather than on the first page that queries.
+        wh.conn.execute("select 1")
+        return wh.conn
+    except Exception:
+        return None
 
 
 def is_demo() -> bool:
