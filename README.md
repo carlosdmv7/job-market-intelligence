@@ -168,7 +168,7 @@ A sixth scraper, `honeypot`, is registered but **not verified** — its API is
 unconfirmed, it is not in `DEFAULT_SOURCES`, and the daily pipeline does not
 call it. It is a hook, not a source, and is excluded from every count here.
 
-dbt lineage (rendered from the real DAG — 9 models, 1 seed, 49 data tests):
+dbt lineage (rendered from the real DAG — 9 models, 1 seed, 53 data tests):
 
 ```mermaid
 flowchart LR
@@ -231,7 +231,7 @@ and market trends accumulate one snapshot per day.
 |---|---|
 | Contracts (Pydantic v2, `content_hash`, `SCHEMA_VERSION`) | Production-grade: versioned, hash-stable, 100% typed |
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
-| dbt medallion (dedup grain, quality tests) | Production-grade: 49 data tests incl. grain + invariant tests |
+| dbt medallion (dedup grain, quality tests) | Production-grade: 53 data tests incl. grain, invariant and liveness tests |
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
@@ -274,7 +274,7 @@ make ingest-nl                # Adzuna NL (needs free ADZUNA_APP_ID/KEY)
 make ingest SOURCE=adzuna COUNTRY=de   # any Adzuna country (nl/es/de/fr/it/...)
 make sponsors-refresh         # IND register -> dbt seed (monthly)
 make enrich                   # LLM classification -> raw
-make dbt-build                # staging -> marts (+ 49 data tests)
+make dbt-build                # staging -> marts (+ 53 data tests)
 make evals                    # score the classifier (offline, replayed)
 make app                      # Streamlit at http://localhost:8501
 ```
