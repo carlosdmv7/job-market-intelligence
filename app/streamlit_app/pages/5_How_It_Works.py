@@ -422,6 +422,15 @@ with st.expander("The four checks"):
 2. **marts schema only** — the prompt never exposes raw or staging.
 3. **Forced LIMIT** — capped at 500 rows.
 4. **Read-only connection** — even a guard bypass cannot write.
+
+The first three are checks in this repo's code, so they fail the way code
+fails. The fourth is the one that holds when the other three are wrong, so it
+is not this app's promise to keep: the connection is opened read-only and
+**MotherDuck refuses the write server-side**. The token itself is read/write,
+because the free plan issues no other kind — which is exactly why the
+guarantee is placed on the connection instead. There is no fallback to a
+writable connection; without a read-only one the app serves the committed
+sample and says so.
 """
     )
 

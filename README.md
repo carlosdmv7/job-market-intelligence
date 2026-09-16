@@ -235,7 +235,7 @@ and market trends accumulate one snapshot per day.
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
-| Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, read-only connection) — not hardened against a hostile user |
+| Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
 | LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds); 22 postings labelled for the visa target, and the English target that replaced it is **not labelled yet**, so no headline accuracy is claimed |
 | Containerisation | None. There was Docker Compose scaffolding; it could not be built or run here, so it was deleted rather than left as an untested claim ([ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)) |
 
@@ -250,7 +250,7 @@ and market trends accumulate one snapshot per day.
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
-| [docs](docs) | Architecture + 8 ADRs |
+| [docs](docs) | Architecture + 9 ADRs |
 
 ## Quickstart
 
@@ -287,8 +287,16 @@ agent share the setting.
 **Deploying the app** with live data needs no code change and no committed
 secret: on Streamlit Community Cloud, put `motherduck_token` and
 `JMI_DUCKDB_DATABASE` in the app's **Secrets** panel, which lives in that
-dashboard and never touches the repo. A **read-only** token is the right one for
-a public app. Without either, the app serves the committed sample and says so.
+dashboard and never touches the repo. Without either, the app serves the
+committed sample and says so.
+
+The token is a **read/write** one, because MotherDuck's free plan issues no
+other kind — so the app's safety deliberately does not rest on it. The
+connection is opened `read_only=True` and **MotherDuck enforces that
+server-side**: a write over a read-only attachment is refused by the server, not
+by a check in this code. There is no fallback to a writable connection; if
+read-only cannot be opened the app drops to the committed sample rather than
+quietly acquiring write access ([ADR 0009](docs/adr/0009-read-only-by-connection-not-by-token.md)).
 
 ## Development
 
@@ -314,6 +322,7 @@ all offline, no warehouse or LLM needed.
 6. [The golden set is the classifier's contract](docs/adr/0006-llm-evaluation.md)
 7. [Stack fit is the product; visa is a showcase — and batching the enrichment](docs/adr/0007-fit-first-and-batched-enrichment.md)
 8. [Gemini is the default provider; the container scaffolding is gone](docs/adr/0008-gemini-is-the-default-provider.md)
+9. [The app is read-only by connection, not by token](docs/adr/0009-read-only-by-connection-not-by-token.md)
 
 ## Measuring the LLM, not just using it
 
