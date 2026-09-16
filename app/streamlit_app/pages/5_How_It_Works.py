@@ -226,22 +226,91 @@ st.dataframe(
 )
 
 # --- evals ---------------------------------------------------------------------
-st.markdown("#### 4 · Is the classifier any good? — measured, not asserted")
+st.markdown("#### 4 · Is the classifier any good? — checked, not asserted")
 st.markdown(
-    "The classifier is scored against a **hand-labelled golden set**, never "
-    'asserted from vibes — the committed contract for what "correct" means '
-    "here ([ADR 0006](https://github.com/carlosdmv7/job-market-intelligence/blob/main/docs/adr/0006-llm-evaluation.md))."
+    "Two ways to answer, and neither of them is the model grading itself. The "
+    "first needs no hand labels at all and covers **every** posting the model "
+    "has read; the second is a hand-labelled golden set, which costs a human "
+    "afternoon per hundred rows and is reserved for questions the first cannot "
+    "reach."
 )
-with st.expander('What "correct" means here'):
+
+st.markdown("##### Cross-check: the model's read vs. a signal it never sees")
+st.markdown(
+    "`english_sufficient` is the model's reading of the prose. **The language the "
+    "ad is written in** is detected deterministically on ingest, from the text "
+    "itself, and the classifier is never told it. So the two are independent, and "
+    "lining them up is free, instant, and covers everything — no sampling, no "
+    "labelling, no quota."
+)
+
+lang_check = run_df(
+    """
+    select
+        detected_language                                   as lang,
+        count(*)                                            as read_by_llm,
+        count(*) filter (where english_sufficient)          as says_english_ok,
+        count(*) filter (where english_sufficient is null)  as model_silent
+    from marts.FT_JOB_POSTING
+    where is_enriched and is_target_role and detected_language is not null
+    group by 1
+    having count(*) >= 10
+    order by 2 desc
+    """
+)
+if not lang_check.empty:
+    lang_check["agreement"] = lang_check["says_english_ok"] / lang_check["read_by_llm"]
+    ui.table(
+        lang_check[["lang", "read_by_llm", "says_english_ok", "model_silent", "agreement"]],
+        column_config={
+            "lang": st.column_config.TextColumn("Ad written in"),
+            "read_by_llm": st.column_config.NumberColumn("Postings read"),
+            "says_english_ok": st.column_config.NumberColumn('Model says "English is enough"'),
+            "model_silent": st.column_config.NumberColumn(
+                "Model declined to say", help="The text gave it nothing to go on."
+            ),
+            "agreement": st.column_config.ProgressColumn(
+                "Share", format="percent", min_value=0.0, max_value=1.0
+            ),
+        },
+    )
+    st.caption(
+        "Languages with at least 10 postings read. This is a **diagnostic, not an "
+        "accuracy score** — neither column is ground truth, so what it measures is "
+        "whether two independent signals tell the same story."
+    )
+
+with st.expander("What this table is evidence of, and what it isn't"):
     st.markdown(
         """
-The ground truth answers *"does this posting's text state or imply
-sponsorship?"* — never *"can this employer sponsor?"*. That second question is
-already answered, deterministically and better, by the IND register join above.
-CI replays **recorded** production responses, so a red eval means the prompt or
-the code changed, never that the model had a bad morning.
+**It is evidence that the model is reading, not guessing.** A model pattern-matching
+on "data engineer" would answer the same way whatever language the ad was in. The
+split is sharp instead: a Dutch-language ad almost never gets "English is enough",
+an English-language one usually does. That separation has to come from the text.
+
+**It is also the finding that changed the app.** If the language of the ad predicts
+the answer this strongly, then the deterministic signal is nearly as good as the
+model's — and it is free, instant, and present on **100% of postings** instead of
+the share the quota has reached. So the Find Jobs filter runs on the *detected
+language*, and the model's reading stays on the posting card as detail, where a
+partial-coverage signal does no harm.
+
+**It is not accuracy.** Neither side is ground truth. A Dutch-language ad *can*
+describe an English-speaking team, and some of those 15 Spanish postings really
+are English-working. Answering "how often is the model right?" needs a human to
+say what right was — which is the golden set below, and what it costs is why it
+is spent on questions this cross-check cannot answer.
 """
     )
+
+st.markdown("##### The golden set")
+st.markdown(
+    'Hand-labelled postings, the committed contract for what "correct" means '
+    "([ADR 0006](https://github.com/carlosdmv7/job-market-intelligence/blob/main/docs/adr/0006-llm-evaluation.md)). "
+    "CI replays **recorded** production responses — no key, no quota, no network — "
+    "so a red eval means the prompt or the code changed, never that the model had a "
+    "bad morning."
+)
 
 
 def _eval_report() -> dict | None:
@@ -285,22 +354,30 @@ _target = (report or {}).get("target", "english")
 _headline = (report or {}).get("target_headline", "Classifier")
 labelled, total = _golden_progress(_target)
 
-with st.expander("Why the headline metric moved from visa sponsorship to English"):
+with st.expander("What the golden set has measured, and what it is not being spent on"):
     st.markdown(
         """
-The harness was built around the visa field, because visa sponsorship was the
-product. The measurement is what retired it: across 730 postings the classifier
-had read, its own output was `unclear` 583 times and `explicit_yes` **once**.
+**What it measured.** The harness was built around the visa field, because visa
+sponsorship was the product. The measurement is what retired it: across 730
+postings the classifier had read, its own output was `unclear` 583 times and
+`explicit_yes` **once**. Twenty-two hand labels later, `explicit_no` scores 1.00
+on 6 postings and `explicit_yes` scores 0.000 on 5 — every one of them read as
+`likely_yes` or `unclear`. The class the product would have depended on is the
+one the model cannot call, and no amount of further labelling fixes that: with
+one positive in 730, ten of them means labelling seven thousand postings by hand.
+That finding is worth more than the feature was.
 
-Fourteen hand labels then scored 0.000 precision on `explicit_yes` — not because
-the model failed, but because a class that rare cannot be measured. No amount of
-further labelling fixes that; the corpus simply does not contain the signal.
+**What it is not being spent on.** The obvious next target was
+english-sufficiency. It is deliberately left unlabelled, because the cross-check
+above already answers the question the app depends on, at 100% coverage and zero
+cost: the language an ad is written in separates the cases sharply enough to
+filter on directly. Labelling 200 postings by hand to score a model whose output
+the app no longer filters by would be effort spent on a number rather than on
+the tool.
 
-So the target moved to a field that *is* measurable and that changes a decision:
-**can someone who speaks English but not the local language do this job?** The
-corpus splits roughly 355 / 330 / 45 on it. The visa labels are kept and
-`--target visa` still scores them — a retired metric is part of the record, not
-an embarrassment to delete.
+A harness that only ever measured one field would have to be rewritten each time
+the product moved; this one takes `--target`, so the visa labels stay scoreable
+and the door stays open if a question ever needs a human answer again.
 """
     )
 
@@ -362,13 +439,36 @@ if report and report.get("n", 0) >= _MIN_SCORED:
 elif total:
     scored = report.get("n", 0) if report else 0
     st.info(
-        f"**The harness is built and wired into CI; the labels are in progress** — "
-        f"{labelled} of {total} sampled postings labelled, {scored} of them scored "
-        f"so far (a label only scores once the pipeline has enriched that posting). "
-        f"Headline accuracy appears here at {_MIN_SCORED} scored postings: a "
-        "percentage computed on a handful of rows would be exactly the unmeasured "
-        "confidence this section exists to avoid."
+        f"**No headline accuracy is claimed, on purpose.** The harness is built and "
+        f"wired into CI, and {labelled} of {total} sampled postings carry a hand "
+        f"label for `{_target}` — {scored} of them scoreable, below the "
+        f"{_MIN_SCORED} this page requires before printing a percentage. A number "
+        "computed on a handful of rows is exactly the unmeasured confidence this "
+        "section exists to avoid, and the per-class table below is the honest way "
+        "to read a set this size.",
+        icon="🔍",
     )
+    if report:
+        per_class = pd.DataFrame(report["per_class"]).T.reset_index(names="class")
+        per_class = per_class[per_class["support"] > 0]
+        if not per_class.empty:
+            st.markdown(f"##### {_headline} — per class, on {scored} scored postings")
+            ui.table(
+                per_class[["class", "support", "precision", "recall", "f1"]],
+                column_config={
+                    "class": st.column_config.TextColumn("Class"),
+                    "support": st.column_config.NumberColumn(
+                        "Labelled", help="How many labelled postings truly are this class."
+                    ),
+                    "precision": st.column_config.NumberColumn("Precision", format="%.2f"),
+                    "recall": st.column_config.NumberColumn("Recall", format="%.2f"),
+                    "f1": st.column_config.NumberColumn("F1", format="%.2f"),
+                },
+            )
+            st.caption(
+                "Classes with no labelled example are omitted rather than shown as "
+                "zeros — an absent class is not a failed one."
+            )
 else:
     st.info(
         "The eval harness ships with this repo (`evals/`), but no golden set has "
