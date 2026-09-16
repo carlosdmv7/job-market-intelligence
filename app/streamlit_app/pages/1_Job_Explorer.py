@@ -127,13 +127,12 @@ where = (" where " + " and ".join(clauses)) if clauses else ""
 df = run_df(
     f"""
     select
-        job_posting_key, content_hash, title, company_name, country_code, location_raw,
+        content_hash, title, company_name, country_code, location_raw,
         seniority, salary_raw, source, source_url, apply_url, posted_at, last_seen_at,
-        detected_language,
-        is_active, days_since_seen,
+        detected_language, technologies, normalized_role,
+        is_enriched, english_sufficient, working_languages, relocation_support,
         is_recognised_sponsor, sponsor_kvk, visa_status, visa_confidence, visa_evidence,
-        visa_reasoning, is_enriched, english_sufficient, requires_local_language,
-        working_languages, relocation_support, technologies, normalized_role,
+        visa_reasoning,
         enrichment_model, enrichment_prompt_version, enriched_at, enrichment_confidence,
         remote_policy, employment_type
     from marts.FT_JOB_POSTING

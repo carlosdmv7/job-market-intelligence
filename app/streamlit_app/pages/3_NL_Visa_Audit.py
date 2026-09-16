@@ -127,7 +127,6 @@ df = run_df(
         company_name, title, country_code,
         is_recognised_sponsor, sponsor_kvk,
         visa_status, round(visa_confidence, 2) as llm_confidence,
-        english_sufficient, requires_local_language, relocation_support,
         salary_raw, source, source_url, visa_evidence, visa_reasoning,
         is_enriched, posted_at, last_seen_at,
         {ui.SPONSORSHIP_SQL} as sponsorship
@@ -243,8 +242,9 @@ with ev2:
         st.warning("**Not yet classified.** The classifier has not read this posting.")
         st.caption(
             "Enrichment is capped by the Gemini free tier at 20 requests/day/model — a "
-            "measured limit, not an estimate — so coverage accumulates slowly. This is "
-            "an absence of evidence, not evidence of absence: do not read it as "
+            "measured limit, not an estimate. Ten postings ride in each request, so the "
+            "queue clears roughly 200 a day and this posting will reach it. Until then "
+            "it is an absence of evidence, not evidence of absence: do not read it as "
             "'no sponsorship'."
         )
     else:
