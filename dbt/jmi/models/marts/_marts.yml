@@ -11,6 +11,14 @@ models:
           expression: "is_recognised_sponsor or sponsor_kvk is null"
           config:
             alias: ft_posting_kvk_implies_sponsor_flag
+      # The app's language filter compares detected_language to 'en', so an
+      # 'en-GB' or an 'english' would match nothing and empty the filter
+      # silently rather than raise. Two characters or null, never anything else.
+      - dbt_utils.expression_is_true:
+          expression: "length(detected_language) = 2"
+          config:
+            where: "detected_language is not null"
+            alias: ft_posting_detected_language_is_iso_639_1
     columns:
       - name: job_posting_key
         data_tests: [not_null, unique]
@@ -46,6 +54,20 @@ models:
         data_tests:
           - not_null
           - dbt_utils.accepted_range: { min_value: 0 }
+      - name: is_target_role
+        description: >
+          Data/analytics/ML role, by the shared title vocabulary in
+          jmi_core.roles (applied here through the jmi_is_target_role macro).
+          Every list in the app defaults to filtering on it, so a null would
+          silently drop postings from every page at once.
+        data_tests: [not_null]
+      - name: detected_language
+        description: >
+          ISO-639-1 code for the language the advertisement is *written* in,
+          detected on ingest. Nullable — detection can abstain — but never a
+          longer string: the app's language filter compares it to 'en', so a
+          'en-GB' or 'english' creeping in would match nothing and quietly
+          empty the filter rather than error. Shape asserted at model level.
       - name: is_visa_sponsor
         description: LLM read of the posting text (soft signal).
         data_tests: [not_null]
