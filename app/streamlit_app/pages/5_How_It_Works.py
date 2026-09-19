@@ -49,7 +49,7 @@ _tests = (
 
 st.markdown("#### 1 · A daily pipeline, at 0€")
 st.markdown(
-    "Every morning at 07:15 Amsterdam time, a GitHub Actions cron runs the whole thing: "
+    "Every morning at 05:15 UTC, a GitHub Actions cron runs the whole thing: "
     f"collect postings → have an LLM read them → rebuild the tables → **{_tests} data "
     "tests must pass**. Nothing is hosted, nothing is paid for."
 )

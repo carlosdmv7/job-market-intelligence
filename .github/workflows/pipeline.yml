@@ -11,7 +11,7 @@ name: Daily pipeline
 
 on:
   schedule:
-    - cron: "15 5 * * *" # 07:15 Europe/Amsterdam (CEST) — before the workday
+    - cron: "15 5 * * *" # 05:15 UTC, daily — early enough to be done before the workday
   workflow_dispatch: # manual runs for testing / catch-up
 
 concurrency:
