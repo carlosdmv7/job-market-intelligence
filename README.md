@@ -11,8 +11,8 @@ It ingests postings from five free job APIs, has an LLM read each one for the
 technologies it names, its seniority and its working language, models the result
 dimensionally with dbt, and serves it through a seven-page Streamlit app — with
 stack-overlap CV scoring, a guard-railed natural-language **"Ask the Data"**
-agent, and a classifier that is measured against a hand-labelled golden set
-rather than trusted.
+agent, and a classifier that is cross-checked against a deterministic signal it
+is never shown rather than trusted.
 
 Two rules run through all of it: **a posting the LLM has not read yet says so**
 everywhere instead of being reported as a negative finding, and **a posting that
@@ -44,7 +44,7 @@ Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
 
 ![Ask the Data: question box and example prompts, with the live provider and model shown](docs/img/ask-the-data.png)
 
-**How It Works** — the pipeline diagram, live coverage, the real system prompt, and the classifier's eval scores.
+**How It Works** — the pipeline diagram, live coverage, the real system prompt, and the cross-check that stands in for an accuracy score.
 
 ![How It Works: the pipeline diagram, the deterministic-vs-model signal split, the real system prompt, and the eval harness](docs/img/how-it-works.png)
 
@@ -109,8 +109,10 @@ of one market, not a feature of the app:
    possible.
 2. **LLM (secondary):** the posting *text* is classified into a visa enum with
    confidence + verbatim evidence ([ADR 0003](docs/adr/0003-visa-enum-classification.md)),
-   and that classifier is **measured against a hand-labelled golden set**
-   ([ADR 0006](docs/adr/0006-llm-evaluation.md)) rather than trusted.
+   and that classifier is **measured, not trusted** — against the 22 hand
+   labels that retired this very feature ([ADR 0006](docs/adr/0006-llm-evaluation.md)),
+   and, for the question the app actually depends on, against a deterministic
+   signal at full coverage ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)).
 
 Measured on this corpus: **~3%** of companies on remote-first boards are
 recognised sponsors against **~34%** on the Dutch local corpus — a gap a model
@@ -135,7 +137,7 @@ full reasoning, with the numbers, is in ADR 0007.
 | **Market Trends** | Country comparison incl. how often the ads are written in English, leading stacks day by day, 60+ days of snapshots |
 | **Market Detail** | One market at a time: what it asks for, who is hiring, and **how much of it we can actually read** — plus, for the Netherlands only, the IND sponsor cross-reference with KvK receipts |
 | **Ask the Data** | Natural language in, guard-railed read-only SQL out, with the generated SQL always shown |
-| **How It Works** | The pipeline diagram, live coverage, the real system prompt, the classifier's eval scores |
+| **How It Works** | The pipeline diagram, live coverage, the real system prompt, and how the classifier is checked |
 
 **My Fit** is deliberately two-tier, for the same reason the visa signal is:
 spend nothing where determinism suffices, spend the LLM where it earns its cost.
@@ -338,10 +340,13 @@ all offline, no warehouse or LLM needed.
 
 ## Measuring the LLM, not just using it
 
-The classifier is scored against a hand-labelled golden set of ~200 stratified
-postings ([`evals/`](evals)). CI replays **recorded** production responses — no
-key, no quota, no network — so a red eval means the prompt or the code changed,
-never that the model had a bad morning.
+Two instruments, used on different questions ([`evals/`](evals)). A
+hand-labelled golden set — stratified sampler, 22 labels made, all on the visa
+target — and a full-coverage cross-check against a signal the model never sees.
+CI replays **recorded** production responses — no key, no quota, no network — so
+a red eval means the prompt or the code changed, never that the model had a bad
+morning. **No headline accuracy figure is claimed**, and the sampler stays in the
+repo because the next question worth labelling may not have a cheap proxy.
 
 ```bash
 make evals-sample                # stratified, deterministic, additive
@@ -370,7 +375,8 @@ two line up sharply enough to act on:
 That separation is evidence the model is reading rather than pattern-matching on
 job titles — and it is also why the app's language filter runs on the detected
 language, which is present on **100%** of postings, rather than on the model's
-read, which is present on the share the quota has reached. Scoring a field
+read — which now covers every open role, but only names a stack on the 47% whose
+source publishes enough text to name one. Scoring a field
 nothing filters by would buy a number, not a better tool
 ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)).
 

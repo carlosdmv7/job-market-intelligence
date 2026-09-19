@@ -42,7 +42,7 @@ Scope is optional and names the area — `app`, `evals`, `flows`, `dbt`,
 `scrapers`, `adr`.
 
 ```
-feat(evals): keyboard labelling pass over the golden set
+feat(app): replace the NL visa page with Market Detail
 fix(app): last-ingest metric crashed the home page's live snapshot
 ci: run the 45 dbt tests instead of only parsing the project
 ```
