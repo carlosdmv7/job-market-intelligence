@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from streamlit_app.agent import build_sql, clean_sql, enforce_limit, is_safe_select
+from streamlit_app.agent import (
+    SYSTEM_PROMPT,
+    build_sql,
+    clean_sql,
+    enforce_limit,
+    is_safe_select,
+)
 
 
 def test_clean_sql_strips_fences():
@@ -78,3 +84,16 @@ def test_build_sql_happy_path():
 def test_build_sql_rejects_unsafe():
     with pytest.raises(ValueError):
         build_sql("nuke it", FakeProvider("drop table marts.FT_JOB_POSTING"))
+
+
+def test_the_prompt_teaches_how_to_rank_a_list_column():
+    """The first canned example asks "which technologies are most in demand".
+
+    Without this guidance the model answered it with a bare
+    ``SELECT technologies ... LIMIT 500`` — one row per posting, blanks
+    included, no ranking. A schema that shows only how to *filter* a list
+    column invites that, so it has to show how to aggregate one too.
+    """
+    prompt = SYSTEM_PROMPT.lower()
+    assert "unnest" in prompt
+    assert "aggregate" in prompt

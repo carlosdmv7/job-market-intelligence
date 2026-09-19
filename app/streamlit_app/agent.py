@@ -47,6 +47,11 @@ Tips:
   against the official IND register, verifiable via sponsor_kvk. The LLM's read of the
   posting text (is_visa_sponsor, visa_status='explicit_yes') is a secondary signal.
 - array membership: list_contains(technologies, 'dbt').
+- ranking a list column ("most in demand", "top technologies"): unnest it and count,
+  e.g. SELECT t, count(*) AS postings FROM marts.FT_JOB_POSTING, unnest(technologies)
+  AS u(t) WHERE country_code = 'ES' GROUP BY t ORDER BY postings DESC LIMIT 20.
+  Selecting the raw list column instead returns one row per posting, including the
+  empty lists of postings whose stack was never extracted, which answers nothing.
 - trends over time: group marts.FT_JOB_SNAPSHOT_DAILY by date_key.
 - country_code is ISO alpha-2 (NL, SE, DE, ES, ...); local per-country corpora come
   from adzuna (NL/DE/ES) and jobtech (SE); remote-first boards often have NULL country.
@@ -59,7 +64,9 @@ SYSTEM_PROMPT = (
     "- Output ONLY the SQL, no prose, no markdown fences.\n"
     "- Read-only: a single SELECT (or WITH ... SELECT). Never modify data.\n"
     "- Use only the marts schema below; never reference raw or staging.\n"
-    "- Always include a LIMIT (<= 500).\n\n" + MARTS_SCHEMA
+    "- Always include a LIMIT (<= 500).\n"
+    "- A question asking which, most, top or how many wants an AGGREGATE — group and "
+    "count, ordered, not a dump of raw rows.\n\n" + MARTS_SCHEMA
 )
 
 # "replace" is deliberately absent: as a bare word it is the legitimate scalar
