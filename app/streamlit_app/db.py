@@ -161,6 +161,23 @@ def table_exists(qualified: str) -> bool:
     return not df.empty
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def staging_available() -> bool:
+    """True when the app can reach `staging`, which the demo sample omits.
+
+    The committed sample carries the marts only: full posting descriptions are
+    megabytes of text and the repo caps a committed file at 512 KB. So anything
+    reading `staging.stg_job_postings` — the description on a posting card, the
+    per-source text-length table on Market Detail — has to ask first and say
+    what is missing rather than raising a Catalog Error at a visitor running a
+    fresh clone.
+    """
+    try:
+        return table_exists("staging.stg_job_postings")
+    except WarehouseUnreachable:
+        return False
+
+
 def require_marts(*qualified: str, missing: str, level: str = "warning") -> None:
     """Halt the page with an accurate diagnosis when the data isn't queryable."""
     try:

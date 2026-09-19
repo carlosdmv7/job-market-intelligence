@@ -26,15 +26,16 @@ PAGES = {
     ],
     "Analyse": [
         st.Page("pages/2_Market_Trends.py", title="Market Trends", icon="📈"),
+        # Market Trends compares the five markets; this one goes deep on one of
+        # them. It absorbed the standalone Netherlands visa page: the IND
+        # register cross-reference is a property of a single market, and giving
+        # it its own nav entry made a five-country app read as a Dutch
+        # relocation tool. It now renders as a section when NL is selected.
+        st.Page("pages/3_Market_Detail.py", title="Market Detail", icon="🌍"),
         st.Page("pages/4_Ask_the_Data.py", title="Ask the Data", icon="💬"),
     ],
-    # The visa cross-reference is a showcase of deterministic-vs-LLM signal, not
-    # a daily-use page: the user is an EU citizen and needs no sponsorship, and
-    # only 1 posting in 730 states it explicitly. It reads as engineering
-    # evidence, so it sits with the engineering pages.
     "How it works": [
         st.Page("pages/5_How_It_Works.py", title="Pipeline & Evals", icon="⚙️"),
-        st.Page("pages/3_NL_Visa_Audit.py", title="Visa Signal (NL)", icon="🛂"),
     ],
 }
 

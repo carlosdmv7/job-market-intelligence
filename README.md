@@ -26,7 +26,7 @@ Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
 [![The Overview page: open data roles per country, the stacks being hired for, and live coverage](docs/img/home.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/)
 
 <details>
-<summary><b>More screens</b> — Find Jobs, My Fit, Market Trends, Ask the Data, How It Works, the visa showcase</summary>
+<summary><b>More screens</b> — Find Jobs, My Fit, Market Trends, Market Detail, Ask the Data, How It Works</summary>
 
 **Find Jobs** — every open posting as a filterable row; select one for the full card, which leads with the stack, the seniority and whether English alone is enough.
 
@@ -48,9 +48,9 @@ Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
 
 ![How It Works: the pipeline diagram, the deterministic-vs-model signal split, the real system prompt, and the eval harness](docs/img/how-it-works.png)
 
-**Visa sponsorship (Netherlands)** — the auditable-data showcase: register match, KvK number, and the model's read side by side.
+**Market Detail** — one market at a time, including how much of it is legible; selecting the Netherlands adds the IND sponsor register cross-reference with its KvK receipts.
 
-![The Netherlands visa page: sponsor rates, the IND cross-reference, and per-posting evidence](docs/img/visa-sponsorship.png)
+![Market Detail on the Netherlands: KPIs including "roles we can stack-match", the source legibility table, stacks and seniority](docs/img/market-detail.png)
 
 </details>
 
@@ -62,9 +62,15 @@ comes back as fact. Three disciplines here instead.
 ### 1. Absence is never reported as a finding
 
 Enrichment is capped by a free tier at a measured **20 requests/day/model**, so
-partial coverage is the permanent normal state. Every surface labels it: a
-posting the LLM has not read reads as **"not yet classified"**, never as "no
-match". Conflating the two would break the one thing the tool is for.
+for most of this project's life partial coverage was the normal state. Every
+surface labels it: a posting the LLM has not read reads as **"not yet
+classified"**, never as "no match". Conflating the two would break the one thing
+the tool is for.
+
+The queue is now clear — **100% of open data roles have been read** — which
+makes the labelling matter *more*, not less: only 47% of them yield a tech
+stack, and that gap is no longer the quota. It is the source (see below), and
+the app says which of the two it is rather than reporting one number.
 
 The quota is counted in *requests*, not tokens, so ten postings ride in each
 one — the same free budget reads **200 postings a day instead of 20**. Each
@@ -88,7 +94,10 @@ Where a question has an authoritative source, the project uses it and shows the
 receipt; the LLM is reserved for what only exists as prose. **Visa sponsorship
 is the one field where both are available for the same question**, which makes
 it the clearest demonstration — and it is treated as a showcase, not as the
-product ([ADR 0007](docs/adr/0007-fit-first-and-batched-enrichment.md)):
+product ([ADR 0007](docs/adr/0007-fit-first-and-batched-enrichment.md),
+[ADR 0011](docs/adr/0011-market-detail-absorbs-the-visa-page.md)). It lives
+inside the **Netherlands** market page, because that is what it is — a property
+of one market, not a feature of the app:
 
 1. **Deterministic (primary):** every company is cross-referenced against the
    official **IND register of recognised sponsors** — the ~12,800 Dutch
@@ -124,9 +133,9 @@ full reasoning, with the numbers, is in ADR 0007.
 | **Find Jobs** | Every open posting as a filterable row — market, stack, seniority, salary, working language — and a card that leads with fit |
 | **My Fit** | Your CV against every open role: free stack-overlap ranking, then one LLM call on the posting you pick |
 | **Market Trends** | Country comparison incl. how often the ads are written in English, leading stacks day by day, 60+ days of snapshots |
+| **Market Detail** | One market at a time: what it asks for, who is hiring, and **how much of it we can actually read** — plus, for the Netherlands only, the IND sponsor cross-reference with KvK receipts |
 | **Ask the Data** | Natural language in, guard-railed read-only SQL out, with the generated SQL always shown |
 | **How It Works** | The pipeline diagram, live coverage, the real system prompt, the classifier's eval scores |
-| **Visa signal (NL)** | The auditable-data showcase: IND register cross-reference, KvK receipts, per-posting evidence |
 
 **My Fit** is deliberately two-tier, for the same reason the visa signal is:
 spend nothing where determinism suffices, spend the LLM where it earns its cost.
@@ -151,7 +160,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
-   Streamlit: Overview · Find Jobs · My Fit · Trends · Ask the Data · How It Works · Visa (NL)
+   Streamlit: Overview · Find Jobs · My Fit · Trends · Market Detail · Ask the Data · How It Works
 ```
 
 **The 5 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
@@ -233,7 +242,8 @@ and market trends accumulate one snapshot per day.
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
 | dbt medallion (dedup grain, quality tests) | Production-grade: 53 data tests incl. grain, invariant and liveness tests |
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
-| LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
+| Ingestion **depth** | Uneven, measured, and surfaced in the app: Adzuna returns a ~500-character teaser per posting, JobTech the full ~4,000-character ad. The same classifier extracts ~1.0 technologies from the former and ~7.9 from the latter, so 91% of Swedish roles are stack-matchable against 30–39% of Dutch, German and Spanish ones. A source limitation, not a market fact — Market Detail says so per country rather than letting the charts imply otherwise |
+| LLM enrichment | Working; the Gemini free tier caps throughput at ~200 postings/day and the backlog is now cleared — **100% of open data roles read**. 47% yield a tech stack, and that ceiling is source depth, not quota |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
 | LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds). 22 postings hand-labelled for the visa target — the measurement that retired that feature. **No headline accuracy is claimed** and none is planned: the question the app depends on is cross-checked against a deterministic signal at 100% coverage instead ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)) |
@@ -250,7 +260,7 @@ and market trends accumulate one snapshot per day.
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
-| [docs](docs) | Architecture + 10 ADRs |
+| [docs](docs) | Architecture + 11 ADRs |
 
 ## Quickstart
 
@@ -324,6 +334,7 @@ all offline, no warehouse or LLM needed.
 8. [Gemini is the default provider; the container scaffolding is gone](docs/adr/0008-gemini-is-the-default-provider.md)
 9. [The app is read-only by connection, not by token](docs/adr/0009-read-only-by-connection-not-by-token.md)
 10. [Cross-check against a deterministic signal instead of hand labels](docs/adr/0010-cross-check-instead-of-hand-labels.md)
+11. [Market Detail absorbs the visa page](docs/adr/0011-market-detail-absorbs-the-visa-page.md)
 
 ## Measuring the LLM, not just using it
 

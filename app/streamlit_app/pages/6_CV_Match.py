@@ -20,7 +20,7 @@ from streamlit_app.cv_match import (
     score_jobs,
     useful_vocabulary,
 )
-from streamlit_app.db import require_marts, run_df
+from streamlit_app.db import require_marts, run_df, staging_available
 
 from jmi_core.settings import get_settings
 from jmi_core.text import strip_html
@@ -182,11 +182,17 @@ st.caption(
 )
 
 if st.button("Analyze my fit (1 LLM call)", type="primary"):
-    desc = run_df(
-        "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
-        (job["content_hash"],),
-    )
-    description = strip_html(desc.iloc[0, 0]) if not desc.empty else None
+    # The deep-dive reads better with the full text, but it is not required:
+    # the extracted stack alone still gives the model something concrete. The
+    # demo sample has no staging schema, and this path sits behind a button, so
+    # nothing would have caught it raising on a fresh clone.
+    description = None
+    if staging_available():
+        desc = run_df(
+            "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
+            (job["content_hash"],),
+        )
+        description = strip_html(desc.iloc[0, 0]) if not desc.empty else None
     prompt = build_deep_dive_prompt(
         cv_text,
         title=job["title"],

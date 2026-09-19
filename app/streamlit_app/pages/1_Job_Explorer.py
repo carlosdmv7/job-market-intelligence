@@ -15,7 +15,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 from streamlit_app import ui
-from streamlit_app.db import require_marts, run_df
+from streamlit_app.db import require_marts, run_df, staging_available
 
 from jmi_core.text import strip_html
 
@@ -53,8 +53,8 @@ ORDERINGS = {
     # actionable ordering once you are browsing only live postings.
     "Last seen": "last_seen_at desc nulls last",
     "Newest posted": "posted_at desc nulls last",
-    "Language fit": "(english_sufficient is true) desc, is_enriched desc, last_seen_at desc",
-    "Visa signal": "is_recognised_sponsor desc, is_enriched desc, last_seen_at desc",
+    "Language fit": "(detected_language = 'en') desc, last_seen_at desc",
+    "Stack read": "len(technologies) desc, last_seen_at desc",
 }
 
 f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
@@ -64,7 +64,7 @@ picked_techs = f3.multiselect("Technologies (LLM-extracted)", techs)
 sort = f4.selectbox("Sort by", list(ORDERINGS))
 
 
-g1, g2, g3, g4, g5 = st.columns(5, gap="medium")
+g1, g2, g3, g4 = st.columns(4, gap="medium")
 active_only = g1.toggle(
     "Open only",
     value=True,
@@ -91,8 +91,18 @@ english_only = g3.toggle(
         "of the time; of the Dutch-language ones, never."
     ),
 )
-enriched_only = g4.toggle("LLM-read only", help="Has a parsed stack, seniority and language.")
-sponsor_only = g5.toggle("IND sponsor only", help="Company on the Dutch visa-sponsor register.")
+# "IND sponsor only" and a "Visa signal" ordering used to sit here — two of the
+# nine controls on the page used daily, both answering a question an EU passport
+# already answers. The register cross-reference is still in the app, as a
+# section of the Netherlands market page, where it is a property of that market
+# rather than a filter on every search.
+enriched_only = g4.toggle(
+    "Stack read only",
+    help=(
+        "Has at least one technology extracted. Truncated sources (Adzuna, "
+        "~500 characters per ad) often name none — see Market Detail."
+    ),
+)
 
 clauses: list[str] = []
 params: list = []
@@ -116,12 +126,10 @@ if active_only:
     clauses.append("is_active")
 if data_roles_only:
     clauses.append("is_target_role")
-if sponsor_only:
-    clauses.append("is_recognised_sponsor")
 if english_only:
     clauses.append("detected_language = 'en'")
 if enriched_only:
-    clauses.append("is_enriched")
+    clauses.append("len(technologies) > 0")
 where = (" where " + " and ".join(clauses)) if clauses else ""
 
 df = run_df(
@@ -330,14 +338,24 @@ with st.expander("🛂 Visa sponsorship — only if you would need one"):
                 st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
 
 with st.expander("Full description (as scraped)"):
-    desc = run_df(
-        "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
-        (row["content_hash"],),
-    )
-    text = strip_html(desc.iloc[0, 0]) if not desc.empty else None
-    if text:
-        st.text(text)
+    # Descriptions live in staging, which the committed demo sample omits — the
+    # text is megabytes and a committed file here is capped at 512 KB. This used
+    # to raise a Catalog Error on a fresh clone, but only once a row was
+    # selected, so no test reached it.
+    if not staging_available():
+        st.caption(
+            "Full descriptions are not part of the committed demo sample. "
+            "Connect a warehouse, or open the posting at its source above."
+        )
     else:
-        st.markdown("_No description captured for this posting._")
+        desc = run_df(
+            "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
+            (row["content_hash"],),
+        )
+        text = strip_html(desc.iloc[0, 0]) if not desc.empty else None
+        if text:
+            st.text(text)
+        else:
+            st.markdown("_No description captured for this posting._")
 
 ui.page_footer()

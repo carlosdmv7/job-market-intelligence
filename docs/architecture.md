@@ -27,7 +27,8 @@
             ▼
  Streamlit app (app/streamlit_app), top nav, entry point Home.py
    Overview · Find Jobs · My Fit (CV stack overlap) · Market Trends ·
-   Ask the Data (text-to-SQL agent) · How It Works · Visa signal (NL)
+   Market Detail (one market, incl. the NL sponsor register) ·
+   Ask the Data (text-to-SQL agent) · How It Works
             │
             ▼
  Run history ─► meta.pipeline_run (appended by the pipeline, read by the app's
@@ -67,5 +68,11 @@
 - "Is this a data role?" has exactly one definition, `jmi_core.roles`, shared by
   the scrapers, the enrichment queue and dbt (via the `jmi_is_target_role`
   macro); `scrapers/tests/test_target_role_parity.py` keeps the two in step.
+- Sources differ in *depth*, not just coverage: Adzuna publishes a ~500-char
+  teaser, JobTech the full ~4,000-char ad, so extraction quality is a property
+  of the source and not of the market. Anything aggregated per country carries
+  that caveat (ADR 0011). `staging.stg_job_postings` is at observation grain —
+  join it to the marts on `content_hash` and a posting fans out once per
+  sighting.
 
 See `adr/` for the decisions behind these.
