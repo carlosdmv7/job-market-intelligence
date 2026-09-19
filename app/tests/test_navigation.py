@@ -19,7 +19,7 @@ PAGE_PATHS = [
     "pages/0_Overview.py",
     "pages/1_Job_Explorer.py",
     "pages/2_Market_Trends.py",
-    "pages/3_NL_Visa_Audit.py",
+    "pages/3_Market_Detail.py",
     "pages/4_Ask_the_Data.py",
     "pages/5_How_It_Works.py",
     "pages/6_CV_Match.py",
