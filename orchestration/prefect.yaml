@@ -28,18 +28,18 @@ definitions:
     work_queue_name: default
 
 deployments:
-  - name: ingest-adzuna-nl # the relocation corpus — the source that matters
+  - name: ingest-adzuna-nl # the Dutch local corpus; Adzuna also serves DE and ES
     entrypoint: orchestration/jmi_flows/ingest.py:ingest_flow
     parameters:
       source: adzuna
     work_pool: *work_pool
     schedules:
-      - cron: "0 6 * * *" # 06:00 daily — produces a fresh FT_JOB_SNAPSHOT_DAILY row
-        timezone: Europe/Amsterdam
+      - cron: "0 6 * * *" # 06:00 UTC daily — produces a fresh FT_JOB_SNAPSHOT_DAILY row
+        timezone: UTC
 
   - name: enrich
     entrypoint: orchestration/jmi_flows/enrich.py:enrich_flow
     work_pool: *work_pool
     schedules:
-      - cron: "30 6 * * *" # 06:30 daily — after ingestion
-        timezone: Europe/Amsterdam
+      - cron: "30 6 * * *" # 06:30 UTC daily — after ingestion
+        timezone: UTC

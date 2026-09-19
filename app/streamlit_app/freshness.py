@@ -148,7 +148,7 @@ def header_facts() -> list[Fact]:
                 "last pipeline run",
                 age,
                 tone,
-                help="Newest `last_seen_at` in the marts. The pipeline runs daily at 07:15 Amsterdam.",
+                help="Newest `last_seen_at` in the marts. The pipeline runs daily at 05:15 UTC.",
             )
         )
         facts.append(

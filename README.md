@@ -220,7 +220,7 @@ Grain table and full diagram: [docs/architecture.md](docs/architecture.md) ·
 ## What runs every day
 
 [`pipeline.yml`](.github/workflows/pipeline.yml) executes
-`ingest → enrich → dbt build` every morning (07:15 Amsterdam). GitHub Actions
+`ingest → enrich → dbt build` every morning (05:15 UTC). GitHub Actions
 is the deliberate 0€ substitute for an always-on orchestration worker; the
 flows carry Prefect `@flow` decorators, so they *would* report state and logs to
 Prefect Cloud if `PREFECT_API_URL`/`PREFECT_API_KEY` were set. They are not set:
