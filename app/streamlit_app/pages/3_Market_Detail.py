@@ -25,7 +25,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 from streamlit_app import ui
-from streamlit_app.db import require_marts, run_df
+from streamlit_app.db import require_marts, run_df, staging_available
 
 ui.configure_page("Market Detail")
 ui.page_header(
@@ -132,25 +132,35 @@ st.markdown("#### How well we can see this market")
 # directly multiplied the count (229 Spanish roles rendered as 5,160) and
 # silently weighted the averages toward whatever has been on the board longest.
 # One description per content_hash first, then join.
-legibility = run_df(
-    f"""
-    with described as (
-        select content_hash, max(length(description_raw)) as chars
-        from staging.stg_job_postings
-        group by content_hash
+legibility = pd.DataFrame()
+if not staging_available():
+    st.info(
+        "This section needs the posting text itself, which lives in `staging` and "
+        "is not part of the committed demo sample — full descriptions are "
+        "megabytes and a committed file here is capped at 512 KB. Connect a "
+        "warehouse to see it.",
+        icon="📦",
     )
-    select
-        p.source,
-        count(*)                                        as postings,
-        round(avg(d.chars))                             as avg_chars,
-        round(avg(len(p.technologies)), 2)              as avg_techs
-    from marts.FT_JOB_POSTING p
-    join described d on d.content_hash = p.content_hash
-    where {scope("p")}
-    group by 1 order by postings desc
-    """,
-    params,
-)
+else:
+    legibility = run_df(
+        f"""
+        with described as (
+            select content_hash, max(length(description_raw)) as chars
+            from staging.stg_job_postings
+            group by content_hash
+        )
+        select
+            p.source,
+            count(*)                                    as postings,
+            round(avg(d.chars))                         as avg_chars,
+            round(avg(len(p.technologies)), 2)          as avg_techs
+        from marts.FT_JOB_POSTING p
+        join described d on d.content_hash = p.content_hash
+        where {scope("p")}
+        group by 1 order by postings desc
+        """,
+        params,
+    )
 
 if not legibility.empty:
     ui.table(

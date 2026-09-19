@@ -15,7 +15,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 from streamlit_app import ui
-from streamlit_app.db import require_marts, run_df
+from streamlit_app.db import require_marts, run_df, staging_available
 
 from jmi_core.text import strip_html
 
@@ -338,14 +338,24 @@ with st.expander("🛂 Visa sponsorship — only if you would need one"):
                 st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
 
 with st.expander("Full description (as scraped)"):
-    desc = run_df(
-        "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
-        (row["content_hash"],),
-    )
-    text = strip_html(desc.iloc[0, 0]) if not desc.empty else None
-    if text:
-        st.text(text)
+    # Descriptions live in staging, which the committed demo sample omits — the
+    # text is megabytes and a committed file here is capped at 512 KB. This used
+    # to raise a Catalog Error on a fresh clone, but only once a row was
+    # selected, so no test reached it.
+    if not staging_available():
+        st.caption(
+            "Full descriptions are not part of the committed demo sample. "
+            "Connect a warehouse, or open the posting at its source above."
+        )
     else:
-        st.markdown("_No description captured for this posting._")
+        desc = run_df(
+            "select description_raw from staging.stg_job_postings where content_hash = ? limit 1",
+            (row["content_hash"],),
+        )
+        text = strip_html(desc.iloc[0, 0]) if not desc.empty else None
+        if text:
+            st.text(text)
+        else:
+            st.markdown("_No description captured for this posting._")
 
 ui.page_footer()

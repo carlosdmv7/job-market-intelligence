@@ -62,9 +62,15 @@ comes back as fact. Three disciplines here instead.
 ### 1. Absence is never reported as a finding
 
 Enrichment is capped by a free tier at a measured **20 requests/day/model**, so
-partial coverage is the permanent normal state. Every surface labels it: a
-posting the LLM has not read reads as **"not yet classified"**, never as "no
-match". Conflating the two would break the one thing the tool is for.
+for most of this project's life partial coverage was the normal state. Every
+surface labels it: a posting the LLM has not read reads as **"not yet
+classified"**, never as "no match". Conflating the two would break the one thing
+the tool is for.
+
+The queue is now clear — **100% of open data roles have been read** — which
+makes the labelling matter *more*, not less: only 47% of them yield a tech
+stack, and that gap is no longer the quota. It is the source (see below), and
+the app says which of the two it is rather than reporting one number.
 
 The quota is counted in *requests*, not tokens, so ten postings ride in each
 one — the same free budget reads **200 postings a day instead of 20**. Each
@@ -237,7 +243,7 @@ and market trends accumulate one snapshot per day.
 | dbt medallion (dedup grain, quality tests) | Production-grade: 53 data tests incl. grain, invariant and liveness tests |
 | Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | Ingestion **depth** | Uneven, measured, and surfaced in the app: Adzuna returns a ~500-character teaser per posting, JobTech the full ~4,000-character ad. The same classifier extracts ~1.0 technologies from the former and ~7.9 from the latter, so 91% of Swedish roles are stack-matchable against 30–39% of Dutch, German and Spanish ones. A source limitation, not a market fact — Market Detail says so per country rather than letting the charts imply otherwise |
-| LLM enrichment | Working, quota-bound: the Gemini free tier caps daily throughput at ~200 postings; coverage accumulates via the daily run |
+| LLM enrichment | Working; the Gemini free tier caps throughput at ~200 postings/day and the backlog is now cleared — **100% of open data roles read**. 47% yield a tech stack, and that ceiling is source depth, not quota |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
 | LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds). 22 postings hand-labelled for the visa target — the measurement that retired that feature. **No headline accuracy is claimed** and none is planned: the question the app depends on is cross-checked against a deterministic signal at 100% coverage instead ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)) |
