@@ -1,25 +1,31 @@
-"""Overview — what is open right now, and in which stacks.
+"""Overview — what is open right now, what each market asks for, and how fast
+it moves.
 
 The first screen answers the question the app exists for: *are there live data
 roles in my stack, and where?* Everything here is scoped to **active** postings
 (still visible on their board) because a count that includes filled roles is
 worse than no count — it reads as a number you can act on and it isn't.
 
-Coverage is stated, not hidden: LLM extraction is quota-bound, so the share of
-postings with a parsed stack is shown next to the stack chart rather than
-letting the chart imply the whole corpus.
+The stack chart used to rank technologies by raw mentions across all markets.
+That ranking was Sweden's: JobTech carries each posting's full text, where the
+LLM finds ~7 technologies, and Adzuna returns a snippet, where it finds ~2 —
+so 75 of the 94 "python" mentions were Swedish. The heatmap compares each
+market's *mix* instead, which holds whatever the depth of the text behind it.
 """
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 from streamlit_app import ui
+from streamlit_app.charts import bar_daily_new_roles, heatmap_stack_mix
 from streamlit_app.db import require_marts, run_df
+from streamlit_app.theme import show
 
 ui.configure_page("EU data jobs")
 
 ui.page_header(
-    title="🧭 Job Market Intelligence",
+    title="Job Market Intelligence",
     subtitle=(
         "Live data, analytics and ML roles across the EU — ingested daily, "
         "de-duplicated across boards, and ranked against **your** stack."
@@ -35,28 +41,51 @@ require_marts(
     ),
 )
 
-TARGET = "is_target_role"
 LIVE = "is_target_role and is_active"
 
 totals = run_df(
     f"""
     select
         count(*) filter (where {LIVE})                                as live_roles,
-        count(*) filter (where {TARGET})                              as all_roles,
         count(distinct company_name) filter (where {LIVE})             as companies,
-        -- coalesce, not count(distinct country_code): postings with no country are
-        -- remote/global and the table below lists them as their own market row, so
-        -- counting only non-null codes made the metric disagree with the rows
-        -- immediately beside it.
-        count(distinct coalesce(country_code, 'REMOTE'))
-            filter (where {LIVE})                                      as markets,
-        count(*) filter (where {LIVE} and len(technologies) > 0)        as with_stack
+        count(*) filter (where {LIVE} and english_sufficient)           as english_ok
     from marts.FT_JOB_POSTING
     """
 ).iloc[0]
 
 live = int(totals.live_roles)
-closed = int(totals.all_roles) - live
+
+# --- the daily flow ---------------------------------------------------------
+# A sweep that tracked far fewer postings than usual is the scraper's bad day,
+# not the market's: flagged, drawn grey, and kept out of the average.
+PARTIAL_SWEEP = 0.85
+FLOW_DAYS = 60
+
+daily = run_df(
+    """
+    select date_key as day,
+           count(*) filter (where is_target_role)                  as tracked,
+           count(*) filter (where is_target_role and is_first_seen) as new_roles
+    from marts.FT_JOB_SNAPSHOT_DAILY
+    group by 1 order by 1
+    """
+)
+if not daily.empty:
+    daily["day"] = pd.to_datetime(daily["day"])
+    daily["partial"] = daily["tracked"] < PARTIAL_SWEEP * daily["tracked"].median()
+    full = daily[~daily["partial"]].set_index("day")["new_roles"]
+    daily["avg7"] = daily["day"].map(full.rolling(7, min_periods=4).mean())
+    # The first days of the history are the backfill, when every posting was
+    # "first seen" at once — a spike that describes the pipeline starting.
+    daily = daily.tail(FLOW_DAYS)
+
+recent = daily[~daily["partial"]] if not daily.empty else daily
+# (this week, the week before), over full sweeps only; None until two weeks exist.
+weeks = (
+    (int(recent.tail(7)["new_roles"].sum()), int(recent.tail(14).head(7)["new_roles"].sum()))
+    if len(recent) >= 14
+    else None
+)
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric(
@@ -64,91 +93,141 @@ m1.metric(
     f"{live:,}",
     help="Still visible on their source board in the latest sweep.",
 )
-m2.metric("Companies hiring", f"{int(totals.companies):,}")
-m3.metric(
-    "Markets",
-    f"{int(totals.markets)}",
-    help="Tracked countries plus one bucket for remote roles with no country.",
+m2.metric(
+    "New in the last 7 days",
+    f"{weeks[0]:,}" if weeks else "—",
+    delta=f"{weeks[0] - weeks[1]:+,} vs the week before" if weeks else None,
+    # Neutral, no arrow: more new postings is not "good" and fewer is not
+    # "bad" — it is the week, and a red arrow would editorialise.
+    delta_color="off",
+    delta_arrow="off",
+    help="Data roles first seen on a board in the last seven full sweeps.",
 )
+m3.metric("Companies hiring", f"{int(totals.companies):,}")
 m4.metric(
-    "Closed, kept for history",
-    f"{closed:,}",
-    help=(
-        "Postings we stopped seeing on their board — almost certainly filled. "
-        "Excluded from browsing, retained so trends over time stay answerable."
-    ),
+    "English is enough",
+    f"{totals.english_ok / live:.0%}" if live else "—",
+    help="Share of open roles where the posting says, or implies, that English "
+    "alone is enough to do the job — read by the LLM from the posting text.",
 )
 
-st.divider()
+# --- what each market asks for, and what just landed ------------------------
+mix_col, new_col = st.columns([3, 2], gap="large")
 
-# --- what stacks are actually being hired for ------------------------------
-stack_col, market_col = st.columns([3, 2], gap="large")
-
-with stack_col:
-    st.markdown("#### Which stacks are hiring")
-    stacks = run_df(
+with mix_col:
+    st.markdown("#### What each market asks for")
+    mix = run_df(
         f"""
-        select tech, count(*) as roles from (
-            select unnest(technologies) as tech
-            from marts.FT_JOB_POSTING where {LIVE}
-        ) group by 1 order by roles desc limit 15
+        with mentions as (
+            select country_code, unnest(technologies) as tech
+            from marts.FT_JOB_POSTING
+            where {LIVE} and country_code is not null
+        ),
+        mix as (
+            select country_code, tech, count(*) as mentions,
+                   count(*) * 1.0 / sum(count(*)) over (partition by country_code) as share
+            from mentions group by 1, 2
+        ),
+        top as (select tech from mix group by 1 order by sum(share) desc limit 12)
+        select * from mix where tech in (select tech from top)
         """
     )
-    if stacks.empty:
+    if mix.empty:
         st.info("No technologies extracted yet — run `make enrich`.")
     else:
-        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title="open roles"))
-        with_stack = int(totals.with_stack)
-        pct = with_stack / live if live else 0
+        # Columns in order of open roles, biggest market first.
+        order = run_df(
+            f"""
+            select country_code, count(*) as n from marts.FT_JOB_POSTING
+            where {LIVE} and country_code is not null group by 1 order by n desc
+            """
+        )["country_code"].tolist()
+        # Every market x technology cell, so a stack a market never names reads
+        # as 0% rather than as a hole in the grid.
+        grid = pd.MultiIndex.from_product(
+            [order, sorted(mix["tech"].unique())], names=["country_code", "tech"]
+        )
+        mix = mix.set_index(["country_code", "tech"]).reindex(grid, fill_value=0).reset_index()
+        mix["market"] = mix["country_code"].map(ui.market_label)
+        show(heatmap_stack_mix(mix, [ui.market_label(c) for c in order]))
         st.caption(
-            f"Read from **{with_stack:,} of {live:,}** open roles ({pct:.0%}) — the LLM "
-            "parses postings within a free daily quota, so this is a sample of the "
-            "market, not a census of it."
+            "Each column is one market's mix: of every technology its postings name, "
+            "the share that is this one. Markets are read at different depths — "
+            "Sweden's board gives full postings, the others a snippet — so the mix "
+            "compares fairly where raw counts would not. Remote roles are too few to "
+            "have a column."
         )
 
-with market_col:
-    st.markdown("#### Where they are")
-    markets = run_df(
+with new_col:
+    st.markdown("#### Just posted")
+    newest = run_df(
         f"""
-        select country_code, count(*) as open_roles,
-               count(distinct company_name) as companies
-        from marts.FT_JOB_POSTING where {LIVE}
-        group by 1 order by open_roles desc
+        select title, company_name, country_code, technologies,
+               coalesce(apply_url, source_url) as url, posted_at
+        from marts.FT_JOB_POSTING
+        where {LIVE} and posted_at is not null
+        order by posted_at desc
+        limit 4
         """
     )
-    markets["market"] = markets["country_code"].map(ui.market_label)
-    markets["share"] = markets["open_roles"] / max(live, 1)
-    ui.table(
-        markets[["market", "open_roles", "companies", "share"]],
-        column_config={
-            "market": st.column_config.TextColumn("Market"),
-            "open_roles": st.column_config.NumberColumn("Roles"),
-            "companies": st.column_config.NumberColumn("Firms"),
-            "share": st.column_config.ProgressColumn(
-                "Share", format="percent", min_value=0.0, max_value=1.0
-            ),
-        },
+    for job in newest.itertuples():
+        with st.container(border=True):
+            st.markdown(
+                f"**{job.title}**  \n{job.company_name} · {ui.market_label(job.country_code)}"
+            )
+            raw = job.technologies
+            # A posting the LLM has not read has no list at all — None or pd.NA,
+            # depending on the connection — not an empty one.
+            techs = [] if raw is None or pd.api.types.is_scalar(raw) else list(raw)[:4]
+            chips = " ".join(f":gray-badge[{t}]" for t in techs)
+            posted = pd.Timestamp(job.posted_at)
+            st.markdown(
+                (chips + "  \n" if chips else "")
+                + f":small[:gray[Posted {posted:%-d %b}] · [open ↗]({job.url})]"
+            )
+    st.page_link(
+        "pages/1_Job_Explorer.py", label="Browse every open role", icon=":material/arrow_forward:"
     )
-    st.page_link("pages/2_Market_Trends.py", label="Compare markets in detail", icon="📈")
+
+# --- the flow ---------------------------------------------------------------
+if not daily.empty:
+    st.markdown("#### New data roles, day by day")
+    show(bar_daily_new_roles(daily))
+    st.caption(
+        "Roles first seen on a board each day, with the 7-day average. Grey days are "
+        "partial sweeps — the pipeline tracked far fewer postings than usual — so "
+        "they are left out of the average."
+    )
 
 st.divider()
 
 # --- where to go next -------------------------------------------------------
-n1, n2 = st.columns(2, gap="large")
-with n1:
-    st.markdown("#### 🎯 Score them against your CV")
-    st.markdown(
-        "Paste or upload a CV and every open role gets a stack-overlap score — "
-        "what you already have, what you're missing. Runs locally, no LLM call, "
-        "and the CV never leaves the session."
-    )
-    st.page_link("pages/6_CV_Match.py", label="Open My Fit", icon="🎯")
-with n2:
-    st.markdown("#### 🔎 Browse and filter")
-    st.markdown(
-        "Filter by market, stack, seniority and whether English alone is enough "
-        "to do the job. Open any posting to see the full card and its provenance."
-    )
-    st.page_link("pages/1_Job_Explorer.py", label="Open Find Jobs", icon="🔎")
+n1, n2, n3 = st.columns(3, gap="large")
+for col, page, icon, label, line in [
+    (
+        n1,
+        "pages/6_CV_Match.py",
+        "target",
+        "My Fit",
+        "Upload a CV and every open role gets a stack-overlap score. Runs locally.",
+    ),
+    (
+        n2,
+        "pages/1_Job_Explorer.py",
+        "search",
+        "Find Jobs",
+        "Filter by market, stack, seniority and whether English alone is enough.",
+    ),
+    (
+        n3,
+        "pages/2_Market_Trends.py",
+        "trending_up",
+        "Market Trends",
+        "Every market side by side, and how its stacks move over time.",
+    ),
+]:
+    with col, st.container(border=True):
+        st.page_link(page, label=f"**{label}**", icon=f":material/{icon}:")
+        st.caption(line)
 
 ui.page_footer()
