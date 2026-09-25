@@ -28,7 +28,7 @@ from jmi_enrichment.providers import get_provider
 
 ui.configure_page("My Fit")
 ui.page_header(
-    title="🎯 My Fit",
+    title="My Fit",
     subtitle=(
         "Paste your CV and every open role gets scored on how much of its stack you "
         "already have — instantly, with no LLM call."

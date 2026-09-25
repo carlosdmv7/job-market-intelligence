@@ -35,7 +35,7 @@ _MIN_SCORED = 30
 
 ui.configure_page("How It Works")
 ui.page_header(
-    title="⚙️ How It Works",
+    title="How it works",
     subtitle="Every claim in this app is traceable. This page shows the machinery.",
 )
 
@@ -446,7 +446,7 @@ elif total:
         "computed on a handful of rows is exactly the unmeasured confidence this "
         "section exists to avoid, and the per-class table below is the honest way "
         "to read a set this size.",
-        icon="🔍",
+        icon=":material/search:",
     )
     if report:
         per_class = pd.DataFrame(report["per_class"]).T.reset_index(names="class")

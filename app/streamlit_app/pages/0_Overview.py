@@ -19,7 +19,7 @@ from streamlit_app.db import require_marts, run_df
 ui.configure_page("EU data jobs")
 
 ui.page_header(
-    title="🧭 Job Market Intelligence",
+    title="Job Market Intelligence",
     subtitle=(
         "Live data, analytics and ML roles across the EU — ingested daily, "
         "de-duplicated across boards, and ranked against **your** stack."

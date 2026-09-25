@@ -21,7 +21,7 @@ from jmi_core.text import strip_html
 
 ui.configure_page("Find Jobs")
 ui.page_header(
-    title="🔎 Find Jobs",
+    title="Find Jobs",
     subtitle=(
         "Open data roles across every market and source, de-duplicated. "
         "Select a row to open the full posting card."
@@ -254,7 +254,7 @@ if not row["is_enriched"]:
         "**The LLM has not read this posting yet** — no stack, seniority or working "
         "language for it. Not read is not the same as nothing found: it is in the "
         "queue, which clears roughly 200 postings a day.",
-        icon="⏳",
+        icon=":material/hourglass_top:",
     )
 else:
     fit1, fit2 = st.columns(2, gap="large")
@@ -271,7 +271,11 @@ else:
         ]
         if any(bits):
             st.markdown(" · ".join(b for b in bits if b))
-        st.page_link("pages/6_CV_Match.py", label="Score this stack against your CV", icon="🎯")
+        st.page_link(
+            "pages/6_CV_Match.py",
+            label="Score this stack against your CV",
+            icon=":material/target:",
+        )
 
     with fit2:
         st.markdown("##### 🗣️ Can you do this job in English?")
