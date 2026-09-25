@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from jmi_core.logging import get_logger
 from jmi_core.roles import is_target_role
 from jmi_core.schema import JobSource
+from jmi_core.text import repair_mojibake
 from jmi_scrapers.base import BaseScraper, parse_iso_dt
 
 if TYPE_CHECKING:
@@ -148,6 +149,12 @@ class RemoteOkScraper(BaseScraper):
         data = self.http.get_json(self.API_URL)
         # Element 0 is a legal/disclaimer object; real jobs have an "id".
         records = [r for r in data if isinstance(r, dict) and r.get("id")]
+        # Repaired before the role filter, which otherwise reads the garbled
+        # title ("TEMPORÃ\x81RIO") and may miss a role it would have kept.
+        records = [
+            {k: repair_mojibake(v) if isinstance(v, str) else v for k, v in r.items()}
+            for r in records
+        ]
         count = scanned = skipped = 0
         for record in records:
             if count >= limit:

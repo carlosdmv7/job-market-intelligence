@@ -297,6 +297,31 @@ def test_remoteok_scrape_drops_off_role_postings():
     assert titles == ["Senior Data Analyst"]
 
 
+def test_remoteok_double_encoded_text_is_repaired_before_the_role_filter():
+    # Exactly as RemoteOK serves it: UTF-8 bytes decoded as Latin-1.
+    garbled_location = "مسقط, عمان".encode().decode("latin-1")
+    http = _FakeBoardHttp(
+        [
+            {"id": 0, "legal": "disclaimer"},
+            {
+                "id": 7,
+                "url": "u7",
+                "position": "Data Analyst Júnior".encode().decode("latin-1"),
+                "company": "Café Lab",  # genuine accent, must survive untouched
+                "location": garbled_location,
+            },
+        ]
+    )
+    scraper = RemoteOkScraper(_s())
+    scraper._http = http
+
+    (posting,) = list(scraper.scrape(10))
+
+    assert posting.title == "Data Analyst Júnior"
+    assert posting.location_raw == "مسقط, عمان"
+    assert posting.company_name == "Café Lab"
+
+
 def test_arbeitnow_scrape_drops_off_role_postings():
     http = _FakeBoardHttp(
         {

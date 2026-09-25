@@ -29,6 +29,29 @@ def strip_html(value: str | None) -> str | None:
     return _WS.sub(" ", text).strip()
 
 
+def repair_mojibake(value: str | None) -> str | None:
+    """Undo UTF-8 text that was decoded as Latin-1 somewhere upstream.
+
+    RemoteOK's API serves some postings double-encoded — "MecÃ¡nico" for
+    "Mecánico", Arabic as "Ø§Ù..." — in about one posting in ten (checked
+    2026-09-25: 160 of 1,678 in the warehouse; 5 of 99 in one live response).
+    The bytes are all there, so re-encoding as Latin-1 and decoding as UTF-8
+    restores the original.
+
+    Only applied when that round trip succeeds strictly. Real Latin-1 text
+    ("Café", "Zürich") is not valid UTF-8 once re-encoded, so it fails the
+    decode and comes back untouched; text with characters beyond Latin-1 cannot
+    be re-encoded at all, so it is left alone too.
+    """
+    if not value or value.isascii():
+        return value
+    try:
+        repaired = value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+    return repaired
+
+
 def detect_language(text: str | None, *, min_chars: int = 20) -> str | None:
     """Return an ISO 639-1 code, or None if undetectable / text too short.
 
