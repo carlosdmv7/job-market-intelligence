@@ -5,15 +5,26 @@ name: dbt docs
 #
 # Built against a throwaway local DuckDB, not MotherDuck: `dbt docs generate`
 # needs the manifest and the catalog, and the catalog can be produced from an
-# empty database. That keeps the docs build off the warehouse's critical path
-# and means it needs no secrets.
+# empty database. That keeps the docs build off the warehouse's critical path.
+#
+# It also publishes status.json beside the docs — the freshness feed the
+# portfolio site reads. That is the one part that does touch the warehouse, and
+# it is best-effort: see the "Publish the freshness feed" step. Deploying to
+# Pages replaces the whole site, so the feed has to ride in this artifact
+# rather than be pushed separately, which is also why this runs daily after
+# the pipeline and not only on merge.
 
 on:
   push:
     branches: [main]
     paths:
       - "dbt/**"
+      - "orchestration/jmi_flows/status_json.py"
       - ".github/workflows/dbt-docs.yml"
+  schedule:
+    # 06:30 UTC — the daily pipeline starts at 05:15 and is capped at 40
+    # minutes, so by now meta.pipeline_run holds this morning's row.
+    - cron: "30 6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -73,6 +84,18 @@ jobs:
             cp dbt/jmi/target/index.html dbt/jmi/target/manifest.json \
                dbt/jmi/target/catalog.json _site/
           fi
+
+      # The portfolio's "live pipeline state" strip fetches this. It must never
+      # fail the docs deploy: no token, an unreachable warehouse or an empty
+      # meta.pipeline_run all leave the file absent, and the portfolio falls
+      # back to its verified static snapshot, which is what that strip was
+      # designed around.
+      - name: Publish the freshness feed
+        continue-on-error: true
+        env:
+          motherduck_token: ${{ secrets.MOTHERDUCK_TOKEN }}
+          JMI_DUCKDB_DATABASE: md:job-market-intelligence
+        run: uv run python -m jmi_flows.status_json --out _site/status.json
 
       - name: Upload the Pages artifact
         uses: actions/upload-pages-artifact@v3
