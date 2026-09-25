@@ -67,7 +67,7 @@ ACCENT = RUST_500
 
 PORTFOLIO_URL = "https://carlosdmv7.github.io/personal-portfolio/"
 AUTHOR = "Carlos De Manuel"
-AUTHOR_ROLE = "Analytics Engineer"
+AUTHOR_ROLE = "Data & Analytics Engineer"
 
 Tone = Literal["neutral", "good", "warn", "bad"]
 
