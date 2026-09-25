@@ -55,3 +55,10 @@ def test_salary_column_is_numeric_even_when_nothing_parses():
     """An object column of Nones renders as the literal string "None"."""
     df = pd.DataFrame({"salary_raw": [None, None], "country_code": ["NL", "NL"]})
     assert add_salary_eur(df)["salary_eur"].dtype.kind == "f"
+
+
+def test_salary_text_says_not_stated_instead_of_none():
+    # st.dataframe draws a missing number as a grey "None"; the grid reads the
+    # text twin, where a missing salary is a dash.
+    df = pd.DataFrame({"salary_raw": [None, "€45,000 per year"], "country_code": ["ES", "ES"]})
+    assert add_salary_eur(df)["salary"].tolist() == ["—", "€45,000"]

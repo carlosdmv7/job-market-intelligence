@@ -55,6 +55,9 @@ ORDERINGS = {
     "Newest posted": "posted_at desc nulls last",
     "Language fit": "(detected_language = 'en') desc, last_seen_at desc",
     "Stack read": "len(technologies) desc, last_seen_at desc",
+    # Most postings state no salary; this puts the ones that do first. The grid
+    # shows salary as text (ui.add_salary_eur), so its header sorts as text.
+    "Salary stated": "salary_raw is null, last_seen_at desc nulls last",
 }
 
 f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
@@ -171,7 +174,7 @@ view = grid[
         "seniority",
         "technologies",
         "english_sufficient",
-        "salary_eur",
+        "salary",
         "posted_at",
         "source_url",
         "source",
@@ -215,7 +218,7 @@ def _items(value) -> list:
 
 rows = ui.selected_rows(event)
 if not rows:
-    st.info("👆 Select a row to open the posting card.")
+    st.info("Select a row to open the posting card.", icon=":material/touch_app:")
     ui.page_footer()
     st.stop()
 
