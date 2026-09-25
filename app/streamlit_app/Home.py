@@ -16,7 +16,19 @@ discovery, so this mapping is the only source of nav order, labels and icons.
 
 from __future__ import annotations
 
+import importlib
+from pathlib import Path
+
 import streamlit as st
+
+from streamlit_app import hot_reload
+
+# Before any page imports a helper: a Cloud redeploy pulls new code into the
+# running server, and without this the pages run new code against the old
+# helpers still cached in sys.modules. The reloader is itself a module a deploy
+# can change, and a stale one cannot be trusted to notice — so it goes first.
+importlib.reload(hot_reload)
+hot_reload.drop_stale(Path(__file__).resolve().parents[2])
 
 # Flat: seven pages, each one click away. Dropdown groups ("Jobs", "Analyse",
 # "How it works") hid five of the seven behind a second click, and a visitor
