@@ -11,9 +11,12 @@ The charts answer three questions in order — *which country*, *which stack*,
 from __future__ import annotations
 
 import altair as alt
+import pandas as pd
 import streamlit as st
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
+
+from jmi_core.settings import get_settings
 
 ui.configure_page("Market Trends")
 ui.page_header(
@@ -42,6 +45,34 @@ SCOPE = "is_target_role and is_active" if open_only else "true"
 # ever collected, and calling those "open roles" would be a false label on a
 # real number — the exact failure this app is built to avoid.
 UNIT = "open roles" if open_only else "all postings"
+
+# Days whose sweep can be read as the market. Two kinds of day cannot: the
+# ramp-up before the first full sweep, when sources were still being added and
+# the count climbed from zero, and partial sweeps, when the pipeline tracked far
+# fewer postings than usual. Both drew steps and dips that the captions read as
+# roles being posted or filled; they were the scraper. Same 85% rule as the
+# Overview's daily chart.
+PARTIAL_SWEEP = 0.85
+try:
+    _sweeps = run_df(
+        """
+        select date_key, count(*) as tracked
+        from marts.FT_JOB_SNAPSHOT_DAILY where is_target_role
+        group by 1 order by 1
+        """
+    )
+except Exception:  # no snapshot table yet: section 3 says so, the rest has nothing to filter
+    _sweeps = pd.DataFrame({"date_key": [], "tracked": []})
+_full = _sweeps["tracked"] >= PARTIAL_SWEEP * _sweeps["tracked"].median()
+_first_full = _sweeps.loc[_full, "date_key"].min() if _full.any() else None
+FULL_SWEEP_DAYS = set(_sweeps.loc[_full & (_sweeps["date_key"] >= _first_full), "date_key"])
+LEFT_OUT = len(_sweeps) - len(FULL_SWEEP_DAYS)
+
+
+def full_sweeps_only(df: pd.DataFrame) -> pd.DataFrame:
+    """Rows of a daily series on days whose sweep reads as the market."""
+    return df[df["date_key"].isin(FULL_SWEEP_DAYS)]
+
 
 # --- 1 · which country -----------------------------------------------------
 st.markdown("#### Where the roles are")
@@ -91,29 +122,51 @@ with c2:
         },
     )
 
-top = by_country.iloc[0] if not by_country.empty else None
-if top is not None:
-    st.caption(
-        f"**{top['market']} leads on volume** with {int(top['open_roles']):,} {UNIT}. "
-        "Volume and language are different questions though — check the "
-        "*Written in English* column before reading a big number as an opportunity."
-    )
+# Each Adzuna market (ES, DE, NL) is swept up to a fixed number of postings a
+# day — JMI_SCRAPE_MAX_POSTINGS, 200 — so their counts sit at that ceiling and
+# say how much was fetched, not how big the market is. "Spain leads on volume"
+# used to be printed off exactly that ceiling.
+SWEEP_CAP = get_settings().scrape_max_postings
+st.caption(
+    f"**These are sampled, not total, volumes.** Spain, Germany and the "
+    f"Netherlands are each read up to {SWEEP_CAP} postings a day, so their counts "
+    "mostly show that ceiling; Sweden stays under it. Compare the "
+    "*Written in English* share, which holds whatever the sample size."
+)
 
 st.divider()
 
 # --- 2 · which stack -------------------------------------------------------
 st.markdown("#### Which stacks are hiring")
 st.caption(
-    "Extracted from the posting text by the LLM, so this covers the share of roles "
-    "it has read so far — a sample of the market, not a census."
+    "Each market weighs the same: a technology's share of every stack mention in a "
+    "market, averaged across markets. Raw counts ranked Sweden — its board carries "
+    "full postings, where the LLM finds ~7 technologies, against ~2 in the snippets "
+    "the other markets give — so they are not used here."
 )
 
+# Markets with too few read postings to have a mix (remote, today) sit out of
+# the average rather than swinging it on a handful of roles.
+MIN_READ_PER_MARKET = 20
 stacks = run_df(
     f"""
-    select tech, count(*) as roles from (
-        select unnest(technologies) as tech
-        from marts.FT_JOB_POSTING where {SCOPE}
-    ) group by 1 order by roles desc limit 15
+    with read as (
+        select country_code, technologies from marts.FT_JOB_POSTING
+        where {SCOPE} and country_code is not null and len(technologies) > 0
+    ),
+    markets as (
+        select country_code from read group by 1 having count(*) >= {MIN_READ_PER_MARKET}
+    ),
+    mix as (
+        select country_code, tech,
+               count(*) * 1.0 / sum(count(*)) over (partition by country_code) as share
+        from (select country_code, unnest(technologies) as tech from read)
+        where country_code in (select country_code from markets)
+        group by 1, 2
+    )
+    select tech,
+           round(100 * sum(share) / (select count(*) from markets), 1) as pct
+    from mix group by 1 order by pct desc limit 15
     """
 )
 if stacks.empty:
@@ -121,7 +174,15 @@ if stacks.empty:
 else:
     s1, s2 = st.columns([2, 3], gap="large")
     with s1:
-        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title=UNIT))
+        ui.show(
+            ui.hbar(
+                stacks,
+                "tech",
+                "pct",
+                color=ui.PRIMARY,
+                value_title="% of stack mentions, average market",
+            )
+        )
     with s2:
         # Six series is the most a shared colour legend stays readable with.
         leaders = stacks.head(6)["tech"].tolist()
@@ -139,7 +200,12 @@ else:
             """,
             tuple(leaders),
         )
+        stack_trend = full_sweeps_only(stack_trend)
         st.markdown("###### Demand for the leading stacks, day by day")
+        st.caption(
+            "Open roles naming each stack. Counts lean towards Sweden's full "
+            "postings, so read each line's direction, not its level."
+        )
         if stack_trend["date_key"].nunique() < 2:
             st.info("Needs at least two snapshot days.")
         else:
@@ -177,6 +243,7 @@ daily = run_df(
     group by date_key order by date_key
     """
 )
+daily = full_sweeps_only(daily)
 if len(daily) < 2:
     st.info(
         f"Only {len(daily)} snapshot day so far — trends appear once the pipeline "
@@ -184,8 +251,10 @@ if len(daily) < 2:
     )
 else:
     st.caption(
-        f"{len(daily)} days on record. Each point is how many data roles were visible "
-        "on the boards that day, so a dip is roles being filled faster than posted."
+        f"{len(daily)} full sweeps. Each point is how many data roles were visible on "
+        f"the boards that day — flat by design, since each Adzuna market is read up to "
+        f"{SWEEP_CAP} postings a day. {LEFT_OUT} days are left out: the pipeline's "
+        "ramp-up and its partial sweeps, whose low counts were the scraper, not the market."
     )
     ui.show(
         alt.Chart(daily)
@@ -223,6 +292,7 @@ else:
         group by 1, 2 order by date_key
         """
     )
+    market_trend = full_sweeps_only(market_trend)
     market_trend["market"] = market_trend["country_code"].map(ui.market_label)
     st.markdown("###### By country")
     # No point markers: five series over 60+ days turned the lines into a
