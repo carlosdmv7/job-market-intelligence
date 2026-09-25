@@ -23,7 +23,7 @@ still apply.
 Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
 [ADR 0005](docs/adr/0005-zero-cost-stack.md) and [ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)).
 
-[![The Overview page: open data roles per country, the stacks being hired for, and live coverage](docs/img/home.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/)
+[![The Overview page: open roles and new roles this week, a heatmap of what each market's stack mix asks for, the newest postings, and new roles day by day](docs/img/home.png)](https://job-market-intelligence-carlosdmv7.streamlit.app/)
 
 <details>
 <summary><b>More screens</b> — Find Jobs, My Fit, Market Trends, Market Detail, Ask the Data, How It Works</summary>
@@ -131,7 +131,7 @@ full reasoning, with the numbers, is in ADR 0007.
 
 | Page | What it answers |
 |---|---|
-| **Overview** | How many data roles are open right now, in which countries, for which stacks |
+| **Overview** | How many data roles are open, what each market's stack mix asks for, what just landed, and how many new roles arrive each day |
 | **Find Jobs** | Every open posting as a filterable row — market, stack, seniority, salary, working language — and a card that leads with fit |
 | **My Fit** | Your CV against every open role: free stack-overlap ranking, then one LLM call on the posting you pick |
 | **Market Trends** | Country comparison incl. how often the ads are written in English, leading stacks day by day, 60+ days of snapshots |
@@ -162,7 +162,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
                                         │
-   Streamlit: Overview · Find Jobs · My Fit · Trends · Market Detail · Ask the Data · How It Works
+   Streamlit: Overview · Find Jobs · My Fit · Market Trends · Market Detail · Ask the Data · How it works
 ```
 
 **The 5 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
