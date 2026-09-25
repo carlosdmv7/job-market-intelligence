@@ -168,7 +168,7 @@ event = st.dataframe(
 # --- LLM tier: one-call deep-dive on the selected posting --------------------
 rows = ui.selected_rows(event)
 if not rows:
-    st.info("👆 Select a posting to unlock the LLM deep-dive.")
+    st.info("Select a posting to unlock the LLM deep-dive.", icon=":material/touch_app:")
     st.stop()
 
 job = ranked.iloc[rows[0]]

@@ -262,10 +262,14 @@ def add_salary_eur(df: pd.DataFrame) -> pd.DataFrame:
         ]
     else:
         parsed = None
-    # Force a float dtype: an object column of Nones renders as the literal
-    # string "None" in st.dataframe, which reads as a value rather than as the
-    # absence of one.
+    # Float dtype, so it sorts and sums as a number.
     out["salary_eur"] = pd.to_numeric(parsed, errors="coerce") if parsed is not None else pd.NA
+    # ...and a text twin for grids. st.dataframe draws a missing number as a
+    # grey "None", and on a column empty for nine postings in ten that read as
+    # a value on almost every row. "—" reads as "not stated".
+    out["salary"] = [
+        "—" if pd.isna(v) else f"€{v:,.0f}" for v in pd.Series(out["salary_eur"], index=out.index)
+    ]
     return out
 
 
@@ -289,13 +293,12 @@ def posting_columns(**overrides) -> dict:
             ),
         ),
         "sponsor_kvk": st.column_config.TextColumn("KvK", help="Dutch company registry number."),
-        "salary_eur": st.column_config.NumberColumn(
+        "salary": st.column_config.TextColumn(
             "Salary (€/yr)",
-            format="euro",
             help=(
                 "Annualised from the posting's raw salary text by the deterministic "
-                "parser. Blank = not stated, or quoted in a non-EUR currency (no FX "
-                "rate is invented here — see the raw text on the posting card)."
+                "parser. — = not stated, or quoted in a non-EUR currency (no FX rate "
+                "is invented here — see the raw text on the posting card)."
             ),
         ),
         "posted_at": st.column_config.DatetimeColumn("Posted", format="YYYY-MM-DD"),

@@ -345,7 +345,7 @@ df = run_df(
 
 grid = ui.add_salary_eur(df)
 grid["market"] = grid["country_code"].map(ui.market_label)
-columns = ["title", "company_name", "seniority", "technologies", "salary_eur", "posted_at"]
+columns = ["title", "company_name", "seniority", "technologies", "salary", "posted_at"]
 config = ui.posting_columns(
     seniority=st.column_config.TextColumn("Seniority"),
     technologies=st.column_config.ListColumn(
@@ -376,7 +376,7 @@ def _items(value) -> list:
 
 rows = ui.selected_rows(event)
 if not rows:
-    st.caption("👆 Select a posting to see what is known about it and where that came from.")
+    st.caption("Select a posting to see what is known about it and where that came from.")
     ui.page_footer()
     st.stop()
 
