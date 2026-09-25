@@ -370,7 +370,7 @@ def demo_notice() -> None:
         f"{size} frozen at export time, not live data. It is weighted toward open data "
         "roles so every page has something real to show; the live app reads the full "
         "corpus from MotherDuck, refreshed daily.",
-        icon="📦",
+        icon=":material/inventory_2:",
     )
 
 

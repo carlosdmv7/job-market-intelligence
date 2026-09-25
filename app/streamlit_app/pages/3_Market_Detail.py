@@ -29,7 +29,7 @@ from streamlit_app.db import require_marts, run_df, staging_available
 
 ui.configure_page("Market Detail")
 ui.page_header(
-    title="🌍 Market Detail",
+    title="Market Detail",
     subtitle=(
         "One market at a time: what is open, what it asks for, who is hiring — "
         "and how much of it we can actually read."
@@ -139,7 +139,7 @@ if not staging_available():
         "is not part of the committed demo sample — full descriptions are "
         "megabytes and a committed file here is capped at 512 KB. Connect a "
         "warehouse to see it.",
-        icon="📦",
+        icon=":material/inventory_2:",
     )
 else:
     legibility = run_df(

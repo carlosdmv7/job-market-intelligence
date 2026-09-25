@@ -17,7 +17,7 @@ from streamlit_app.db import require_marts, run_df
 
 ui.configure_page("Market Trends")
 ui.page_header(
-    title="📈 Market Trends",
+    title="Market Trends",
     subtitle=(
         "Which countries are hiring data people, which stacks they ask for, "
         "and how both move over time."

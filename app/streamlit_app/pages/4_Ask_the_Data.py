@@ -12,7 +12,7 @@ from jmi_enrichment.providers import get_provider
 
 ui.configure_page("Ask the Data")
 ui.page_header(
-    title="💬 Ask the Data",
+    title="Ask the Data",
     subtitle="Ask a question in plain English. An LLM writes the SQL; you get to read it first.",
 )
 st.markdown(

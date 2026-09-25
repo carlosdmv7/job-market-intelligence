@@ -15,3 +15,9 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# Streamlit's default toolbar puts a "Deploy" button in the corner of every
+# page, including the deployed one, where it invites a visitor to deploy an app
+# that already is. "minimal" keeps rerun, print and settings.
+toolbarMode = "minimal"
