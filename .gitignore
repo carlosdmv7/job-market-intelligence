@@ -7,7 +7,6 @@ build/
 dist/
 .venv/
 venv/
-.python-version
 
 # uv — uv.lock IS committed on purpose: this is an application, not a library,
 # so installs must be reproducible (and CI's cache key is derived from it).

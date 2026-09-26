@@ -390,7 +390,7 @@ set is the contract: [ADR 0006](docs/adr/0006-llm-evaluation.md).
 
 ## Tech stack
 
-Python 3.11 · Pydantic v2 · DuckDB/MotherDuck · dbt · Prefect · httpx ·
+Python 3.13 · Pydantic v2 · DuckDB/MotherDuck · dbt · Prefect · httpx ·
 Gemini/Ollama · Streamlit · Altair · uv · ruff · mypy · pytest · GitHub Actions.
 
 ## License

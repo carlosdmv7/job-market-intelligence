@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "jmi-core",
     "jmi-enrichment",
-    "streamlit>=1.38",
+    "streamlit>=1.60",
     "pandas>=2.2",
     "pypdf>=5",  # CV Match: extract text from an uploaded PDF, in-session only
 ]
