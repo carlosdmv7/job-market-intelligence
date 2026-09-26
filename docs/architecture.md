@@ -1,10 +1,12 @@
 # Architecture
 
 ```
- 5 operational sources, all via jmi_scrapers:
+ 6 operational sources, all via jmi_scrapers:
    Remotive, Arbeitnow, RemoteOK  (remote-first boards)      [httpx, no key]
    JobTech (Platsbanken, SE)                                 [httpx, no key]
    Adzuna per-country (NL/DE/ES — the relocation corpora)    [httpx, free key]
+   Employers' Greenhouse/Ashby boards (IE — 33 employers,
+     a sample of employers, not the market)                  [httpx, no key]
    (honeypot is registered but unverified — not counted, not run)
             │  jmi_scrapers → canonical JobPosting
             ▼

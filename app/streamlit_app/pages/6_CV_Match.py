@@ -126,7 +126,7 @@ st.caption(
 )
 
 event = st.dataframe(
-    ranked[
+    ranked.assign(match_pct=100 * ranked["match_pct"])[
         [
             "title",
             "company_name",
@@ -148,9 +148,7 @@ event = st.dataframe(
         "title": st.column_config.TextColumn("Title", width="large"),
         "company_name": st.column_config.TextColumn("Company"),
         "market": st.column_config.TextColumn("Market"),
-        "match_pct": st.column_config.ProgressColumn(
-            "Match", format="percent", min_value=0.0, max_value=1.0
-        ),
+        "match_pct": ui.share_column("Match"),
         "n_techs": st.column_config.NumberColumn(
             "Stack",
             help=(

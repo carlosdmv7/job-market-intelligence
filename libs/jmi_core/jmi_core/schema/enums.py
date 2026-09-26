@@ -24,6 +24,10 @@ class JobSource(StrEnum):
     # Sweden's public employment service (Platsbanken) — free, no key.
     JOBTECH = "jobtech"
 
+    # Ireland: employers' own Greenhouse/Ashby boards — free, no key. A sample
+    # of employers, not the market (see jmi_scrapers.ats).
+    ATS = "ats"
+
     # Scrapfly-era / API sources (improvement hooks, not in the default path).
     LINKEDIN = "linkedin"
     INDEED = "indeed"

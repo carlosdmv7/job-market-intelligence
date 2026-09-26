@@ -51,6 +51,15 @@ TARGET_ROLE_PATTERN = re.compile(
 )
 
 
+#: "Bi-lingual" is a word "BI" matches on its own, and multilingual sales roles
+#: are a staple of Dublin's EMEA hubs ("Account Executive (Bi-lingual)"). It is
+#: removed before matching rather than excluded by the pattern: a lookahead
+#: would do it here, but DuckDB's RE2 has none, and the SQL mirror must match.
+#: Removing the word, rather than dropping every title that has it, keeps
+#: "Bi-lingual Data Analyst", which is a data role.
+BILINGUAL_PATTERN = re.compile(r"\bbi[\s-]+lingual\b", re.IGNORECASE)
+
+
 def is_target_role(title: str | None) -> bool:
     """Is this title a data/analytics/ML role worth ingesting?"""
-    return bool(title and TARGET_ROLE_PATTERN.search(title))
+    return bool(title and TARGET_ROLE_PATTERN.search(BILINGUAL_PATTERN.sub(" ", title)))

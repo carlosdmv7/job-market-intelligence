@@ -7,7 +7,8 @@ An end-to-end **data-engineering + analytics-engineering + LLM** project that
 answers one question every morning: **which open data roles in the EU are asking
 for my stack?**
 
-It ingests postings from five free job APIs, has an LLM read each one for the
+It ingests postings from five free job APIs — plus, for Ireland, which no open
+board covers, 33 employers' own career sites — has an LLM read each one for the
 technologies it names, its seniority and its working language, models the result
 dimensionally with dbt, and serves it through a seven-page Streamlit app — with
 stack-overlap CV scoring, a guard-railed natural-language **"Ask the Data"**
@@ -157,7 +158,7 @@ unit-tested.
 ## Architecture
 
 ```
-5 job sources ──httpx──► ingest ─► raw.raw_job_postings (append-only)
+6 job sources ──httpx──► ingest ─► raw.raw_job_postings (append-only)
 IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichment  (LLM output)
                                         │
                     MotherDuck + dbt medallion: staging → intermediate → marts
@@ -165,7 +166,7 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
    Streamlit: Overview · Find Jobs · My Fit · Market Trends · Market Detail · Ask the Data · How it works
 ```
 
-**The 5 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
+**The 6 sources**, all `httpx`, all in [scrapers/](scrapers/jmi_scrapers):
 
 | Source | Coverage | Key |
 |---|---|---|
@@ -174,6 +175,17 @@ IND sponsor register ──scraper──► dbt seed         raw.raw_job_enrichm
 | `remoteok` | Remote-first boards | none |
 | `jobtech` | Sweden (Platsbanken, public employment service) | none |
 | `adzuna` | Per-country local corpora — NL, DE, ES | free key |
+| `ats` | Ireland — 33 employers' own Greenhouse and Ashby boards | none |
+
+**Ireland is a list of employers, not a market.** Adzuna has no Irish site
+(`/jobs/ie` is a 404), the EU's EURES search API is undocumented and gone, and
+IrishJobs, Jobs.ie and Indeed offer no API. Greenhouse and Ashby publish their
+customers' boards as open JSON, so [`ats.py`](scrapers/jmi_scrapers/ats.py)
+reads 33 employers with an Irish office — picked for having one, not for having
+data roles open the day the list was drawn. That makes Irish roles real and
+applicable, and their mix what those companies ask for rather than what Ireland
+does: they appear in every list, and are left out of the charts that compare
+markets or read a trend.
 
 A sixth scraper, `honeypot`, is registered but **not verified** — its API is
 unconfirmed, it is not in `DEFAULT_SOURCES`, and the daily pipeline does not
@@ -243,7 +255,7 @@ and market trends accumulate one snapshot per day.
 | Contracts (Pydantic v2, `content_hash`, `SCHEMA_VERSION`) | Production-grade: versioned, hash-stable, 100% typed |
 | IND sponsor cross-reference | Production-grade: deterministic, tested, auditable by KvK |
 | dbt medallion (dedup grain, quality tests) | Production-grade: 53 data tests incl. grain, invariant and liveness tests |
-| Ingestion breadth | Demo: 5 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
+| Ingestion breadth | Demo: 6 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES + employers' own boards for IE) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | Ingestion **depth** | Uneven, measured, and surfaced in the app: Adzuna returns a ~500-character teaser per posting, JobTech the full ~4,000-character ad. The same classifier extracts ~1.0 technologies from the former and ~7.9 from the latter, so 91% of Swedish roles are stack-matchable against 30–39% of Dutch, German and Spanish ones. A source limitation, not a market fact — Market Detail says so per country rather than letting the charts imply otherwise |
 | LLM enrichment | Working; the Gemini free tier caps throughput at ~200 postings/day and the backlog is now cleared — **100% of open data roles read**. 47% yield a tech stack, and that ceiling is source depth, not quota |
 | Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |

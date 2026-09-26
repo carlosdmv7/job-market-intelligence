@@ -84,6 +84,8 @@ params: tuple = () if picked == "REMOTE" else (picked,)
 SCOPE = scope()
 
 st.markdown(f"### {labels[picked]}")
+if picked == "IE":
+    st.info(ui.IRELAND_NOTE, icon=":material/info:")
 
 # --- the headline numbers ---------------------------------------------------
 facts = run_df(
@@ -163,6 +165,9 @@ else:
     )
 
 if not legibility.empty:
+    legibility["source"] = legibility["source"].replace(
+        {"ats": "Employers' own boards (Greenhouse, Ashby)"}
+    )
     ui.table(
         legibility,
         column_config={
@@ -183,7 +188,8 @@ if not legibility.empty:
         "**The second column explains the fourth KPI, and neither is about the "
         "country.** Each market here is fed by a single board, and the boards "
         "publish very different amounts of text: Adzuna (ES · DE · NL) returns a "
-        "~500-character teaser, JobTech (SE) returns the full ad at ~4,000. The "
+        "~500-character teaser, JobTech (SE) returns the full ad at ~4,000, and "
+        "Ireland's employer boards the full ad too. The "
         "same classifier reading both finds under one technology per Adzuna "
         "posting and around eight per JobTech one. Nothing is missing from the "
         "pipeline — the text was never there to read."
@@ -231,15 +237,13 @@ with seniority_col:
         params,
     )
     if not seniority.empty:
-        seniority["share"] = seniority["roles"] / max(open_roles, 1)
+        seniority["share"] = 100 * seniority["roles"] / max(open_roles, 1)
         ui.table(
             seniority,
             column_config={
                 "level": st.column_config.TextColumn("Level"),
                 "roles": st.column_config.NumberColumn("Roles"),
-                "share": st.column_config.ProgressColumn(
-                    "Share", format="percent", min_value=0.0, max_value=1.0
-                ),
+                "share": ui.share_column("Share"),
             },
         )
         st.caption(

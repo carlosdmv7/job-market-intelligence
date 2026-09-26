@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check warehouse-init ingest ingest-all ingest-nl ingest-se enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
+.PHONY: help install fmt lint type test check warehouse-init ingest ingest-all ingest-nl ingest-se ingest-ie enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -33,13 +33,16 @@ ingest: ## Run the ingestion flow for one source (SOURCE=remotive [COUNTRY=de])
 	uv run python -m jmi_flows.ingest --source $(or $(SOURCE),remotive) $(if $(COUNTRY),--country $(COUNTRY))
 
 ingest-all: ## Ingest every free no-key source
-	@for s in remotive arbeitnow remoteok jobtech; do uv run python -m jmi_flows.ingest --source $$s; done
+	@for s in remotive arbeitnow remoteok jobtech ats; do uv run python -m jmi_flows.ingest --source $$s; done
 
 ingest-nl: ## Ingest local NL jobs via Adzuna (needs ADZUNA_APP_ID/KEY)
 	uv run python -m jmi_flows.ingest --source adzuna
 
 ingest-se: ## Ingest Sweden via JobTech/Platsbanken (free, no key)
 	uv run python -m jmi_flows.ingest --source jobtech
+
+ingest-ie: ## Ingest Irish roles from employers' Greenhouse/Ashby boards (free, no key)
+	uv run python -m jmi_flows.ingest --source ats
 
 enrich: ## Run the LLM enrichment flow
 	uv run python -m jmi_flows.enrich

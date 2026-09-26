@@ -55,9 +55,9 @@ UNIT = "open roles" if open_only else "all postings"
 PARTIAL_SWEEP = 0.85
 try:
     _sweeps = run_df(
-        """
+        f"""
         select date_key, count(*) as tracked
-        from marts.FT_JOB_SNAPSHOT_DAILY where is_target_role
+        from marts.FT_JOB_SNAPSHOT_DAILY where is_target_role and {ui.market_wide()}
         group by 1 order by 1
         """
     )
@@ -96,7 +96,7 @@ by_country["market"] = by_country["country_code"].map(ui.market_label)
 # is deterministic and present on every row, so no sample guard is needed — and
 # it is a strong proxy: of English-language postings the LLM has read it calls
 # English sufficient 87% of the time, and of Dutch-language ones, never.
-by_country["english_share"] = by_country["written_in_english"] / by_country["open_roles"]
+by_country["english_share"] = 100 * by_country["written_in_english"] / by_country["open_roles"]
 
 c1, c2 = st.columns([3, 2], gap="large")
 with c1:
@@ -108,11 +108,8 @@ with c2:
             "market": st.column_config.TextColumn("Market"),
             "open_roles": st.column_config.NumberColumn("Roles", help=f"Counting {UNIT}."),
             "companies": st.column_config.NumberColumn("Companies"),
-            "english_share": st.column_config.ProgressColumn(
+            "english_share": ui.share_column(
                 "Written in English",
-                format="percent",
-                min_value=0.0,
-                max_value=1.0,
                 help=(
                     "Share of this market's open roles whose ad is written in English. "
                     "Detected on ingest, so it covers every posting — and it is the "
@@ -130,7 +127,9 @@ SWEEP_CAP = get_settings().scrape_max_postings
 st.caption(
     f"**These are sampled, not total, volumes.** Spain, Germany and the "
     f"Netherlands are each read up to {SWEEP_CAP} postings a day, so their counts "
-    "mostly show that ceiling; Sweden stays under it. Compare the "
+    "mostly show that ceiling; Sweden stays under it. Ireland is about 30 "
+    "employers' own career sites, so its count is theirs, not the country's, and it "
+    "is left out of the stack and trend comparisons below. Compare the "
     "*Written in English* share, which holds whatever the sample size."
 )
 
@@ -153,6 +152,7 @@ stacks = run_df(
     with read as (
         select country_code, technologies from marts.FT_JOB_POSTING
         where {SCOPE} and country_code is not null and len(technologies) > 0
+          and {ui.market_wide()}
     ),
     markets as (
         select country_code from read group by 1 having count(*) >= {MIN_READ_PER_MARKET}
@@ -195,7 +195,7 @@ else:
                 select content_hash, unnest(technologies) as tech
                 from marts.FT_JOB_POSTING
             ) t on t.content_hash = s.content_hash
-            where s.is_target_role and t.tech in ({placeholders})
+            where s.is_target_role and {ui.market_wide("s")} and t.tech in ({placeholders})
             group by 1, 2 order by 1
             """,
             tuple(leaders),
@@ -236,10 +236,10 @@ require_marts(
 )
 
 daily = run_df(
-    """
+    f"""
     select date_key, count(*) as open_roles
     from marts.FT_JOB_SNAPSHOT_DAILY
-    where is_target_role
+    where is_target_role and {ui.market_wide()}
     group by date_key order by date_key
     """
 )
@@ -285,10 +285,10 @@ else:
     )
 
     market_trend = run_df(
-        """
+        f"""
         select date_key, country_code, count(*) as open_roles
         from marts.FT_JOB_SNAPSHOT_DAILY
-        where is_target_role
+        where is_target_role and {ui.market_wide()}
         group by 1, 2 order by date_key
         """
     )

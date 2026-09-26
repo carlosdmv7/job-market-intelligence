@@ -68,6 +68,7 @@ digraph pipeline {
     fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
     adzuna [label="Adzuna\nNL · DE · ES"];
     jobtech [label="JobTech\nSE"];
+    ats [label="Employers' own boards\nIE · Greenhouse · Ashby"];
     boards [label="Remote boards\nRemotive · Arbeitnow · RemoteOK"];
   }
 
@@ -92,7 +93,7 @@ digraph pipeline {
 
   app [label="This app", fillcolor="#F5EFE3", color="#D96C2C"];
 
-  adzuna -> raw; jobtech -> raw; boards -> raw;
+  adzuna -> raw; jobtech -> raw; ats -> raw; boards -> raw;
   raw -> llm [label="  not yet read", fontsize=8, fontcolor="#6B7B80"];
   llm -> enr;
   raw -> staging; enr -> staging; ind -> staging;
@@ -259,7 +260,7 @@ lang_check = run_df(
     """
 )
 if not lang_check.empty:
-    lang_check["agreement"] = lang_check["says_english_ok"] / lang_check["read_by_llm"]
+    lang_check["agreement"] = 100 * lang_check["says_english_ok"] / lang_check["read_by_llm"]
     ui.table(
         lang_check[["lang", "read_by_llm", "says_english_ok", "model_silent", "agreement"]],
         column_config={
@@ -269,9 +270,7 @@ if not lang_check.empty:
             "model_silent": st.column_config.NumberColumn(
                 "Model declined to say", help="The text gave it nothing to go on."
             ),
-            "agreement": st.column_config.ProgressColumn(
-                "Share", format="percent", min_value=0.0, max_value=1.0
-            ),
+            "agreement": ui.share_column("Share"),
         },
     )
     st.caption(
