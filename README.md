@@ -238,14 +238,23 @@ Grain table and full diagram: [docs/architecture.md](docs/architecture.md) ·
 
 ## What runs every day
 
-[`pipeline.yml`](.github/workflows/pipeline.yml) executes
-`ingest → enrich → dbt build` every morning (05:15 UTC). GitHub Actions
-is the deliberate 0€ substitute for an always-on orchestration worker; the
-flows carry Prefect `@flow` decorators, so they *would* report state and logs to
-Prefect Cloud if `PREFECT_API_URL`/`PREFECT_API_KEY` were set. They are not set:
-a hosted worker is not 0€, so the decorators are structure, not a live
-deployment. [`prefect.yaml`](orchestration/prefect.yaml) documents the
-worker-based production path and why it is not deployed.
+The pipeline is one Prefect flow, [`jmi-daily`](orchestration/jmi_flows/daily.py):
+every source is a task with its own retries (a board that fails after them is a
+red box in the run graph, not a stopped pipeline), the LLM pass has a hard
+timeout, and dbt is a task whose failure fails the run.
+
+It runs as a **Prefect Cloud deployment**, `jmi-daily/daily`: Prefect owns the
+schedule (05:15 UTC), the parameters and the run history, and a run can be
+started from the Prefect UI. The machine is borrowed. Prefect Cloud's free tier
+has no hybrid work pools and 500 serverless minutes a month, against ~300 for
+this pipeline alone, so an hourly GitHub Actions job
+([`pipeline.yml`](.github/workflows/pipeline.yml)) *serves* the deployment for
+one pass ([`gha_runner.py`](orchestration/jmi_flows/gha_runner.py)): it
+registers it from the code on `main`, runs whatever is due, and exits in about
+a minute when nothing is. A run that fails fails the job, so GitHub still
+emails about it. The cost of the design is visible too: GitHub delays
+scheduled jobs under load, and Prefect shows the run as *Late* until one
+arrives.
 
 The run summary is appended to `meta.pipeline_run` **in the warehouse**, not to
 a committed file — the app reads its freshness strip from there. The earlier
@@ -265,7 +274,7 @@ and market trends accumulate one snapshot per day.
 | Ingestion breadth | Demo: 6 operational sources (3 remote boards + JobTech SE + Adzuna NL/DE/ES + employers' own boards for IE) — a fraction of the real market (LinkedIn/Indeed sit behind paid anti-bot) |
 | Ingestion **depth** | Uneven, measured, and surfaced in the app: Adzuna returns a ~500-character teaser per posting, JobTech the full ~4,000-character ad. The same classifier extracts ~1.0 technologies from the former and ~7.9 from the latter, so 91% of Swedish roles are stack-matchable against 30–39% of Dutch, German and Spanish ones. A source limitation, not a market fact — Market Detail says so per country rather than letting the charts imply otherwise |
 | LLM enrichment | Working; the Gemini free tier caps throughput at ~200 postings/day and the backlog is now cleared — **100% of open data roles read**. 47% yield a tech stack, and that ceiling is source depth, not quota |
-| Orchestration | GitHub Actions cron (real, daily); Prefect deployments documented but not deployed — that would not be 0€ |
+| Orchestration | Production-shaped: a Prefect Cloud deployment with its schedule, parameters and run history, served for one pass by an hourly GitHub Actions job — the free tier has no hybrid work pools, so the compute is borrowed |
 | Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
 | LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds). 22 postings hand-labelled for the visa target — the measurement that retired that feature. **No headline accuracy is claimed** and none is planned: the question the app depends on is cross-checked against a deterministic signal at 100% coverage instead ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)) |
 | Containerisation | None. There was Docker Compose scaffolding; it could not be built or run here, so it was deleted rather than left as an untested claim ([ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)) |
@@ -277,7 +286,7 @@ and market trends accumulate one snapshot per day.
 | [libs/jmi_core](libs/jmi_core) | Canonical Pydantic contracts, settings, logging, MotherDuck client, the data-role vocabulary |
 | [scrapers](scrapers) | The 5 operational `httpx` scrapers + the IND sponsor register |
 | [enrichment](enrichment) | Pluggable LLM providers (Gemini/Ollama/Anthropic), batched classifier, salary parser, dedup |
-| [orchestration](orchestration) | Prefect-instrumented ingest + enrich flows, `prefect.yaml` |
+| [orchestration](orchestration) | The `jmi-daily` Prefect flow, the runner that serves its deployment, and single-step flows for manual runs |
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
