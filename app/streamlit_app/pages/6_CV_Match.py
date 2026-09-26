@@ -22,6 +22,7 @@ from streamlit_app.cv_match import (
 )
 from streamlit_app.db import require_marts, run_df, staging_available
 
+from jmi_core.schema import Seniority
 from jmi_core.settings import get_settings
 from jmi_core.text import strip_html
 from jmi_enrichment.providers import get_provider
@@ -113,16 +114,42 @@ jobs = run_df(
     where is_enriched and is_target_role and is_active and len(technologies) > 0
     """
 )
+# Seniority is the LLM's read of the posting; "unknown" is a posting that does
+# not say, which is almost half of them — so it is its own choice, not dropped.
+LEVELS = {
+    Seniority.INTERN: "Intern",
+    Seniority.JUNIOR: "Junior",
+    Seniority.MID: "Mid",
+    Seniority.SENIOR: "Senior",
+    Seniority.LEAD: "Lead",
+    Seniority.PRINCIPAL: "Principal",
+    Seniority.MANAGER: "Manager",
+    Seniority.UNKNOWN: "Not stated",
+}
+levels = st.pills(
+    "Level",
+    options=list(LEVELS),
+    format_func=LEVELS.__getitem__,
+    selection_mode="multi",
+    default=list(LEVELS),
+    help="The level each posting asks for, as the LLM read it. Untick what isn't you.",
+)
+jobs = jobs[jobs["seniority"].fillna(Seniority.UNKNOWN).isin(levels)]
+
 ranked = score_jobs(jobs, skills)
+if ranked.empty:
+    st.info("No open role with a parsed stack at the levels picked.")
+    st.stop()
 ranked["market"] = ranked["country_code"].map(ui.market_label)
 
 st.markdown(f"##### Ranked matches — {len(ranked):,} open roles with a parsed stack")
 st.caption(
-    "**Score = the share of a posting's technologies your CV already covers.** Read the "
-    "score next to **Stack**: 100% of a two-technology posting is a weaker signal than "
-    "100% of an eight-technology one, so ties break toward the posting with more of its "
-    "stack named. Only open roles whose stack the LLM has read can be ranked, so this "
-    "list grows daily."
+    "**Score = the technologies you have, out of the ones the posting names plus one.** "
+    "The extra one is the requirement a short posting didn't spell out: a quarter of "
+    "these name a single technology, and without it any CV with that one scored 100%. "
+    "Now 1 of 1 is 50% and 5 of 6 is 71%. Fields rather than skills — *analytics*, "
+    "*BI*, *data science* — count on neither side. Only open roles whose stack the LLM "
+    "has read can be ranked, so this list grows daily."
 )
 
 event = st.dataframe(
@@ -152,8 +179,8 @@ event = st.dataframe(
         "n_techs": st.column_config.NumberColumn(
             "Stack",
             help=(
-                "How many technologies the posting names. The denominator of the "
-                "match — a high score over a small stack says less."
+                "How many technologies the posting names, leaving out fields like "
+                "'analytics'. The match is out of this plus one."
             ),
         ),
         "matched": st.column_config.ListColumn("You have"),

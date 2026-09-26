@@ -41,16 +41,52 @@ Base everything only on the two texts provided. Never invent experience the
 CV doesn't contain."""
 
 
-#: Terms the enrichment sometimes extracts that are too generic to be skills —
-#: they'd match every data CV and inflate every score equally.
+#: Terms the enrichment extracts that name a field or a job, not a skill. Every
+#: data CV contains them, so they would match every CV and inflate every score
+#: equally — and they are dropped from the postings' stacks too, not only from
+#: the CV's: a term the CV can never match must not count as a gap either.
 GENERIC_TERMS = frozenset(
-    {"data", "ai", "it", "software", "cloud", "microsoft", "ms office", "office", "tech"}
-)
+    {
+        # the originals
+        "data", "ai", "it", "software", "cloud", "microsoft", "ms office", "office", "tech",
+        # fields and job titles, drawn from the production vocabulary (Sep 2026)
+        "analytics", "advanced analytics", "data & analytics", "data analysis",
+        "data analytics", "data science", "data engineering", "data platform",
+        "data pipelines", "bi", "business intelligence", "reporting", "big data",
+        "artificial intelligence", "software engineering", "databases",
+        "data-intensive solutions", "visual data", "pipelines", "dashboards", "saas",
+    }
+)  # fmt: skip
+
+#: A posting is scored as if it asked for this many more technologies than it
+#: names. Adzuna returns a snippet, so a quarter of the scorable postings name a
+#: single technology, and any CV with it scored 100% — above a posting whose
+#: six named technologies it covers five of. With one unnamed requirement
+#: assumed, 1 of 1 is 50%, 2 of 2 is 67% and 5 of 6 is 71%: a score is trusted
+#: only as far as the evidence behind it goes. The same idea as the empirical-
+#: Bayes benchmark in the sibling spanish-housing-radar project.
+UNNAMED_REQUIREMENTS = 1
+
+
+def is_generic(term: str) -> bool:
+    return term.lower() in GENERIC_TERMS
 
 
 def useful_vocabulary(vocabulary: Iterable[str]) -> list[str]:
-    """Drop hypergeneric terms; keep order (callers pass frequency-sorted)."""
-    return [t for t in vocabulary if t.lower() not in GENERIC_TERMS]
+    """Drop hypergeneric terms and case duplicates; keep order.
+
+    Callers pass the vocabulary frequency-sorted, so the spelling kept is the
+    commonest: the LLM writes "machine learning" 127 times and "Machine
+    Learning" once, and the CV used to show both as separate skills.
+    """
+    seen: set[str] = set()
+    kept = []
+    for term in vocabulary:
+        if is_generic(term) or term.lower() in seen:
+            continue
+        seen.add(term.lower())
+        kept.append(term)
+    return kept
 
 
 def extract_skills(cv_text: str, vocabulary: Iterable[str]) -> list[str]:
@@ -69,18 +105,20 @@ def extract_skills(cv_text: str, vocabulary: Iterable[str]) -> list[str]:
 
 
 def score_jobs(jobs: pd.DataFrame, cv_skills: Sequence[str]) -> pd.DataFrame:
-    """Score each posting by skill overlap: |cv ∩ job| / |job|.
+    """Score each posting by skill overlap, discounted for thin evidence.
 
-    Expects a ``technologies`` column of lists (empty/NA rows are dropped —
-    only enriched postings with extracted technologies are rankable). Adds
-    ``match_pct``, ``matched`` and ``missing`` columns, sorted best-first.
+    ``match_pct`` is ``|cv ∩ job| / (|job| + UNNAMED_REQUIREMENTS)`` over the
+    posting's non-generic technologies. Expects a ``technologies`` column of
+    lists; rows left with none (unenriched, or naming only generic terms) are
+    dropped, since there is nothing to score. Adds ``matched``, ``missing``,
+    ``n_techs`` and ``match_pct``, sorted best-first.
     """
 
     def _as_list(value) -> list:
         # DuckDB array columns come back as pd.NA (not None) when NULL.
         if value is None or (pd.api.types.is_scalar(value) and pd.isna(value)):
             return []
-        return list(value)
+        return [t for t in value if not is_generic(t)]
 
     have = {s.lower() for s in cv_skills}
     scored = jobs.copy()
@@ -93,8 +131,8 @@ def score_jobs(jobs: pd.DataFrame, cv_skills: Sequence[str]) -> pd.DataFrame:
         lambda ts: sorted(t for t in ts if t.lower() not in have)
     )
     scored["n_techs"] = scored["technologies"].map(len)
-    scored["match_pct"] = scored.apply(lambda r: len(r["matched"]) / r["n_techs"], axis=1)
-    # Tie-break on n_techs: a 5-of-5 match beats a 1-of-1 — more evidence.
+    scored["match_pct"] = scored["matched"].map(len) / (scored["n_techs"] + UNNAMED_REQUIREMENTS)
+    # Equal scores: the posting that names more of its stack first.
     return scored.sort_values(["match_pct", "n_techs", "last_seen_at"], ascending=False)
 
 
