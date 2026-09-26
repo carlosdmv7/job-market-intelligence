@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help install fmt lint type test check warehouse-init ingest ingest-all ingest-nl ingest-se ingest-ie enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
+.PHONY: help pipeline install fmt lint type test check warehouse-init ingest ingest-all ingest-nl ingest-se ingest-ie enrich sponsors-refresh dbt-deps dbt-build dbt-docs dbt-status demo-data evals evals-sample evals-label evals-record evals-live app clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -28,6 +28,9 @@ check: lint type test ## Lint + type-check + test (run before pushing)
 
 warehouse-init: ## Create raw/staging/marts schemas + raw tables in MotherDuck
 	uv run python -m jmi_flows.warehouse_init
+
+pipeline: ## Run the whole daily flow once, locally (ARGS="--sources ats --no-enrich")
+	uv run python -m jmi_flows.daily $(ARGS)
 
 ingest: ## Run the ingestion flow for one source (SOURCE=remotive [COUNTRY=de])
 	uv run python -m jmi_flows.ingest --source $(or $(SOURCE),remotive) $(if $(COUNTRY),--country $(COUNTRY))

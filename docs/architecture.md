@@ -10,8 +10,9 @@
    (honeypot is registered but unverified — not counted, not run)
             │  jmi_scrapers → canonical JobPosting
             ▼
- Flows (orchestration/jmi_flows) carrying Prefect @flow decorators, run daily
- by GitHub Actions (.github/workflows/pipeline.yml) — no hosted worker
+ Prefect flow jmi-daily (orchestration/jmi_flows/daily.py): one task per source,
+ enrich, dbt build, record. Deployed to Prefect Cloud (schedule + history), served
+ for one pass by an hourly GitHub Actions job (gha_runner.py) — free tier, no pool
    ingest  ──────────────►  raw.raw_job_postings   (append-only event log)
    enrich  ──── LLM ─────►  raw.raw_job_enrichment (1 row per content_hash)
             │        (Gemini free tier: 20 requests/day/model x 10 postings per
