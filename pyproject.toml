@@ -2,6 +2,11 @@
 name = "job-market-intelligence"
 version = "0.1.0"
 description = "Job Market Intelligence Engine — end-to-end DE/AE/LLM portfolio + relocation tool"
+# The floor stays at 3.11 while dev, CI and the pipeline run 3.13
+# (.python-version, the workflows). Streamlit Community Cloud picks each app's
+# interpreter in its own dashboard, not from this repo, so raising the floor
+# past whatever the live app was deployed with would fail its install with
+# nothing here to say why.
 requires-python = ">=3.11"
 # The root is a thin meta-package; real code lives in the workspace members below.
 # Streamlit Community Cloud resolves dependencies with uv (uv.lock outranks
@@ -45,6 +50,7 @@ jmi-evals = { workspace = true }
 
 [tool.ruff]
 line-length = 100
+# The floor, not the interpreter: ruff must not suggest syntax 3.11 can't run.
 target-version = "py311"
 extend-exclude = ["dbt"]
 
@@ -56,7 +62,10 @@ ignore = ["E501"]  # line length handled by the formatter
 known-first-party = ["jmi_core", "jmi_scrapers", "jmi_enrichment", "jmi_flows", "jmi_evals"]
 
 [tool.mypy]
-python_version = "3.11"
+# The interpreter dev and CI actually run. numpy 2.5 (resolved on 3.12+) ships
+# stubs with PEP 695 `type` statements, which mypy refuses to parse when
+# targeting 3.11; ruff's target-version above still guards the floor's syntax.
+python_version = "3.13"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 warn_unused_ignores = true
