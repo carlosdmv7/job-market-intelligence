@@ -160,6 +160,25 @@ with mix_col:
             "have a column, and Ireland — read from a list of employers, not its whole "
             "market — is left out of the comparison."
         )
+    # Out of the comparison is not out of sight: Ireland gets its own line, and
+    # the link opens Market Detail with it already picked.
+    ireland = run_df(
+        f"""
+        select count(*) as roles, count(distinct company_name) as companies
+        from marts.FT_JOB_POSTING where {LIVE} and country_code = 'IE'
+        """
+    ).iloc[0]
+    if int(ireland.roles):
+        st.page_link(
+            "pages/3_Market_Detail.py",
+            label=(
+                f"{ui.market_label('IE')}: {int(ireland.roles)} open roles at "
+                f"{int(ireland.companies)} tech employers, read from their own career sites"
+            ),
+            icon=":material/arrow_forward:",
+            icon_position="right",
+            query_params={"market": "IE"},
+        )
 
 with new_col:
     st.markdown("#### Just posted")
