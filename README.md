@@ -33,7 +33,7 @@ Gemini free tier, free job APIs, GitHub Actions as the scheduler — see
 
 ![Find Jobs: the filter row, a grid showing each posting's extracted stack, and the open posting card](docs/img/find-jobs.png)
 
-**My Fit** — your CV against every open role, free and instant: the share of each posting's stack you already cover, what you have, what you lack.
+**My Fit** — your CV against every open role, free and instant: how much of each posting's stack you already cover, discounted when the posting names little, with what you have and what you lack.
 
 ![My Fit: detected skills as chips, then every open role ranked by stack overlap with matched and missing technologies](docs/img/my-fit.png)
 
@@ -145,7 +145,14 @@ spend nothing where determinism suffices, spend the LLM where it earns its cost.
 
 1. **Free and instant** — the CV is intersected with the technology vocabulary
    the LLM *already* extracted from postings, and every enriched posting is
-   ranked by the share of its stack you cover. No API call, whole corpus.
+   ranked by `technologies you have / (technologies it names + 1)`. No API
+   call, whole corpus. The +1 is the requirement a short posting didn't spell
+   out: a quarter of the scorable postings name a single technology (Adzuna
+   returns a snippet), and without it any CV with that one scored 100%, above a
+   5-of-6 match. Now 1 of 1 is 50% and 5 of 6 is 71% — a score is trusted only
+   as far as its evidence goes. Fields rather than skills (*analytics*, *BI*,
+   *data science*) count on neither side, and a Level filter narrows the list
+   to the seniority you are after.
 2. **One call, on demand** — the posting you select plus the CV go to the
    provider for a match percentage, honest gaps, and concrete CV edits.
 
