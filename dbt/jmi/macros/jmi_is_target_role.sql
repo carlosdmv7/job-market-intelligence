@@ -12,11 +12,13 @@
    a warehouse starts lying. The app decides where to apply it.
 
    Every term is anchored on both sides. An early Python version anchored only
-   the front and matched "BI" inside "Bildung"; the mirror keeps that fix.
+   the front and matched "BI" inside "Bildung"; the mirror keeps that fix, and
+   removes "bi-lingual" before matching as the Python side does (RE2 has no
+   lookahead to exclude it in the pattern itself).
    tests/test_target_role_parity.py asserts both sides agree on real titles. #}
 {% macro jmi_is_target_role(col) %}
     regexp_matches(
-        lower(coalesce({{ col }}, '')),
+        regexp_replace(lower(coalesce({{ col }}, '')), '\bbi[\s-]+lingual\b', ' ', 'g'),
         '\b(data|analytics?|machine\s+learning|ml\s*ops|ml\s+engineer|ml|ai\s+engineer|ai\s*/\s*ml|business\s+intelligence|bi|etl|dbt|data\s*warehouse|datawarehouse|big\s*data|llm)\b'
     )
 {% endmacro %}

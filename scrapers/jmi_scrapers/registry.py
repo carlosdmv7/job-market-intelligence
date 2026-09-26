@@ -1,7 +1,8 @@
 """Scraper registry: name → scraper class.
 
 Default 0€ set: remotive, arbeitnow, remoteok (free, no key). ``jobtech`` is
-also keyless (Sweden's public employment service). ``adzuna`` needs a free key;
+also keyless (Sweden's public employment service), and so is ``ats`` (Irish
+roles from employers' own Greenhouse/Ashby boards). ``adzuna`` needs a free key;
 ``honeypot`` is kept as a hook (confirm its API). Scrapfly-based sources
 (LinkedIn/Indeed) are an improvement-section addition.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from jmi_scrapers.ats import AtsScraper
 from jmi_scrapers.base import BaseScraper
 from jmi_scrapers.free_apis import (
     AdzunaScraper,
@@ -32,6 +34,7 @@ SCRAPERS: dict[str, type[BaseScraper]] = {
     "remoteok": RemoteOkScraper,
     "adzuna": AdzunaScraper,  # needs ADZUNA_APP_ID / ADZUNA_APP_KEY
     "jobtech": JobTechScraper,  # Sweden (Platsbanken) — free, no key
+    "ats": AtsScraper,  # Ireland, from employers' Greenhouse/Ashby boards — no key
     "honeypot": HoneypotScraper,  # confirm API before relying on it
 }
 

@@ -28,12 +28,15 @@ if TYPE_CHECKING:
     import pandas as pd
 
 __all__ = [
+    "IRELAND_NOTE",
     "MARKETS",
     "SPONSORSHIP_SQL",
     "VISA_LABELS",
     "flag",
     "hbar",
     "market_label",
+    "market_wide",
+    "share_column",
     "show",
     "table",
     "visa_label",
@@ -99,7 +102,30 @@ MARKETS = {
     "SE": "🇸🇪 Sweden",
     "DE": "🇩🇪 Germany",
     "ES": "🇪🇸 Spain",
+    "IE": "🇮🇪 Ireland",
 }
+
+
+def market_wide(alias: str = "") -> str:
+    """SQL predicate: rows read from a market's boards, not from a list of employers.
+
+    Ireland has no open job board (Adzuna has no Irish site), so its roles come
+    from ~30 employers' own Greenhouse/Ashby boards — the ``ats`` source. That
+    answers "what can I apply to in Dublin?", which is why Ireland is in every
+    list; it does not answer "what does Ireland's market ask for?", so it is
+    kept out of every chart that sets markets side by side or reads a trend. Its
+    first sweep would also have landed as ~20 roles "posted" in a single day.
+    """
+    return f"{alias + '.' if alias else ''}source <> 'ats'"
+
+
+IRELAND_NOTE = (
+    "**Ireland is a list of employers, not the market.** No job board with an open "
+    "API covers it, so its roles come from about 30 companies' own career sites — "
+    "mostly tech firms with an EMEA hub in Dublin. Every role here is real and open; "
+    "the mix is what those employers ask for, not what Ireland does, so Ireland is "
+    "left out of the charts that compare markets."
+)
 
 
 def flag(country_code: str) -> str:
@@ -128,6 +154,17 @@ def market_label(country_code: str | None) -> str:
         return MARKETS[code]
     emoji = flag(code)
     return f"{emoji} {code}" if emoji else code
+
+
+def share_column(label: str, **kwargs: Any) -> Any:
+    """A share as a bar with a whole-number percentage. Feed it ``share * 100``.
+
+    Streamlit's ``"percent"`` preset prints up to two decimals, so one column
+    read "81%" above "48.77%" — precision the numbers behind it do not have.
+    """
+    return st.column_config.ProgressColumn(
+        label, format="%.0f%%", min_value=0, max_value=100, **kwargs
+    )
 
 
 def table(df: pd.DataFrame, **kwargs) -> None:

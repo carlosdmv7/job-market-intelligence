@@ -252,6 +252,9 @@ class _FakeBoardHttp:
         # An earlier pattern anchored only the front of each term and matched
         # "BI" inside "Bildung", re-admitting exactly the noise it removes.
         ("Werkstudent (m/w/d) Redaktion Bildung.Table", False),
+        # "BI" is a whole word in "Bi-lingual"; the word is removed before matching.
+        ("Sr. Key Account Executive (Bi-lingual) German", False),
+        ("Bi-lingual Data Analyst (German)", True),
         ("Hotel Executive Assistant Manager", False),
         ("Steuerberater (m/w/d)", False),
         ("Senior Sales Executive", False),

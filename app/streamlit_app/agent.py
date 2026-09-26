@@ -53,8 +53,10 @@ Tips:
   Selecting the raw list column instead returns one row per posting, including the
   empty lists of postings whose stack was never extracted, which answers nothing.
 - trends over time: group marts.FT_JOB_SNAPSHOT_DAILY by date_key.
-- country_code is ISO alpha-2 (NL, SE, DE, ES, ...); local per-country corpora come
+- country_code is ISO alpha-2 (NL, SE, DE, ES, IE, ...); local per-country corpora come
   from adzuna (NL/DE/ES) and jobtech (SE); remote-first boards often have NULL country.
+  IE rows (source = 'ats') come from ~30 employers' own career sites, not the whole
+  Irish market: say so in any answer that compares Ireland with another country.
 """
 
 SYSTEM_PROMPT = (

@@ -66,6 +66,13 @@ jobs:
         continue-on-error: true
         run: uv run python -m jmi_flows.ingest --source jobtech
 
+      # Ireland has no open job board (Adzuna has no Irish site), so its roles
+      # come from employers' own Greenhouse/Ashby boards: a sample of employers,
+      # not the market (scrapers/jmi_scrapers/ats.py). Keyless.
+      - name: Ingest — Ireland (employers' ATS boards, keyless)
+        continue-on-error: true
+        run: uv run python -m jmi_flows.ingest --source ats
+
       - name: Ingest — free remote boards
         continue-on-error: true
         run: |

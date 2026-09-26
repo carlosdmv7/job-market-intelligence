@@ -53,21 +53,28 @@ TITLES = [
     "Werkstudent (m/w/d) Redaktion Bildung.Table",
     "Bildungsreferent (m/w/d)",
     "Senior Mobile Engineer - Retail",
+    # "BI" is a word on its own in "Bi-lingual": Dublin's multilingual sales roles
+    # came in through it until both sides removed the word before matching.
+    "Sr. Key Account Executive (Bi-lingual) German, or Italian or Spanish Speakers",
+    "Bi lingual Customer Success Manager",
+    "Bi-lingual Data Analyst (German)",  # kept: still a data role
 ]
 
 
-def _sql_pattern() -> str:
-    """The regex literal out of the dbt macro, so the test reads the real file."""
+def _sql_expression() -> str:
+    """The macro's whole expression, from the real file, with the column as a
+    parameter. The whole of it, not only the pattern: the bi-lingual removal
+    runs before the match, and a test of the pattern alone would not see it."""
     text = _MACRO.read_text(encoding="utf-8")
-    match = re.search(r"'(\\b\(data\|.*?)'", text, re.S)
-    assert match, "could not find the pattern literal in jmi_is_target_role.sql"
-    return match.group(1)
+    match = re.search(r"\{% macro jmi_is_target_role\(col\) %\}(.*?)\{% endmacro %\}", text, re.S)
+    assert match, "could not find the jmi_is_target_role macro body"
+    body = match.group(1)
+    assert body.count("{{ col }}") == 1, "the column should be referenced exactly once"
+    return body.replace("{{ col }}", "?")
 
 
 @pytest.mark.parametrize("title", TITLES)
 def test_sql_macro_and_python_matcher_agree(title):
     conn = duckdb.connect()
-    sql_says = conn.execute(
-        "select regexp_matches(lower(coalesce(?, '')), ?)", [title, _sql_pattern()]
-    ).fetchone()[0]
+    sql_says = conn.execute(f"select {_sql_expression()}", [title]).fetchone()[0]
     assert bool(sql_says) is is_target_role(title), title

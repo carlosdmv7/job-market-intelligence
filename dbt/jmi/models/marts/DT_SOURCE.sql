@@ -9,6 +9,7 @@ select
     source,
     case source
         when 'jobtech'      then 'SE'  -- Platsbanken, Sweden's public employment service
+        when 'ats'          then 'IE'  -- employers' Greenhouse/Ashby boards, Irish roles only
         when 'honeypot'     then 'NL'
         when 'infojobs'     then 'ES'
         when 'stepstone'    then 'DE'
@@ -18,6 +19,9 @@ select
     end as primary_country,
     case
         when source in ('linkedin', 'indeed', 'remotive', 'remoteok', 'adzuna') then 'aggregator'
+        -- A hand-picked sample of employers, not a board: the one source whose
+        -- country total says who is on the list, not how big the market is.
+        when source = 'ats' then 'employer_sample'
         else 'job_board'
     end as source_type,
     case

@@ -62,11 +62,12 @@ PARTIAL_SWEEP = 0.85
 FLOW_DAYS = 60
 
 daily = run_df(
-    """
+    f"""
     select date_key as day,
            count(*) filter (where is_target_role)                  as tracked,
            count(*) filter (where is_target_role and is_first_seen) as new_roles
     from marts.FT_JOB_SNAPSHOT_DAILY
+    where {ui.market_wide()}
     group by 1 order by 1
     """
 )
@@ -121,7 +122,7 @@ with mix_col:
         with mentions as (
             select country_code, unnest(technologies) as tech
             from marts.FT_JOB_POSTING
-            where {LIVE} and country_code is not null
+            where {LIVE} and country_code is not null and {ui.market_wide()}
         ),
         mix as (
             select country_code, tech, count(*) as mentions,
@@ -139,7 +140,8 @@ with mix_col:
         order = run_df(
             f"""
             select country_code, count(*) as n from marts.FT_JOB_POSTING
-            where {LIVE} and country_code is not null group by 1 order by n desc
+            where {LIVE} and country_code is not null and {ui.market_wide()}
+            group by 1 order by n desc
             """
         )["country_code"].tolist()
         # Every market x technology cell, so a stack a market never names reads
@@ -155,7 +157,8 @@ with mix_col:
             "the share that is this one. Markets are read at different depths — "
             "Sweden's board gives full postings, the others a snippet — so the mix "
             "compares fairly where raw counts would not. Remote roles are too few to "
-            "have a column."
+            "have a column, and Ireland — read from a list of employers, not its whole "
+            "market — is left out of the comparison."
         )
 
 with new_col:
@@ -196,7 +199,8 @@ if not daily.empty:
     st.caption(
         "Roles first seen on a board each day, with the 7-day average. Grey days are "
         "partial sweeps — the pipeline tracked far fewer postings than usual — so "
-        "they are left out of the average."
+        "they are left out of the average. Ireland, read from a list of employers "
+        "rather than its boards, is not counted here."
     )
 
 st.divider()
