@@ -28,7 +28,7 @@
             │
             ▼
  Streamlit app (app/streamlit_app), top nav, entry point Home.py
-   Overview · Find Jobs · My Fit (CV stack overlap) · Market Trends ·
+   Overview · Find Jobs · My Fit (CV stack overlap, evidence-weighted) · Market Trends ·
    Market Detail (one market, incl. the NL sponsor register) ·
    Ask the Data (text-to-SQL agent) · How It Works
             │
