@@ -8,7 +8,18 @@ textColor = "#274C56"
 linkColor = "#A8501F"
 borderColor = "#E4D9C4"
 baseRadius = "0.6rem"
-font = "sans-serif"
+# Flags are emoji, and Windows ships no flag glyphs: Chrome and Edge there drew
+# "ES", "IE"... where every market's flag should be. A flags-only font (Twemoji
+# Country Flags, 78 KB) is listed first but only for the regional-indicator
+# range, so it draws flags and nothing else; all other text falls through to
+# Source Sans, the font the app had before (named, because a bare
+# "sans-serif" in a list means the system font, not Streamlit's own).
+font = "Twemoji Country Flags, Source Sans, sans-serif"
+
+[[theme.fontFaces]]
+family = "Twemoji Country Flags"
+url = "https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2"
+unicodeRange = "U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F"
 
 [server]
 headless = true

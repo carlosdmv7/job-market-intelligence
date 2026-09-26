@@ -57,9 +57,13 @@ if markets.empty:
 
 codes = markets["code"].tolist()
 labels = {c: ("🌍 Remote / global" if c == "REMOTE" else ui.market_label(c)) for c in codes}
+# ?market=IE opens the page on that market — the Overview links Ireland here —
+# and the URL follows the pick, so any market's page can be shared.
+wanted = st.query_params.get("market")
 picked = st.radio(
     "Market",
     codes,
+    index=codes.index(wanted) if wanted in codes else 0,
     format_func=lambda c: (
         f"{labels[c]} · {int(markets.loc[markets['code'] == c, 'open_roles'].iloc[0]):,}"
     ),
@@ -79,6 +83,8 @@ def scope(alias: str = "") -> str:
     match = f"{q}country_code is null" if picked == "REMOTE" else f"{q}country_code = ?"
     return f"{q}is_target_role and {q}is_active and {match}"
 
+
+st.query_params["market"] = picked
 
 params: tuple = () if picked == "REMOTE" else (picked,)
 SCOPE = scope()

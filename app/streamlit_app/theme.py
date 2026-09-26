@@ -44,7 +44,11 @@ TEAL_700 = "#2E6B5E"  # success, secondary button fill (white label)
 RUST_050 = "#FBEADF"
 TEAL_050 = "#E4F0EC"
 
-FONT = "sans-serif"
+# The app's own font stack (.streamlit/config.toml): the flags-only font first,
+# so market labels draw their flags on Windows too, then Source Sans. Charts
+# used a bare "sans-serif" — the system font, a different face from the text
+# around them.
+FONT = '"Twemoji Country Flags", "Source Sans", sans-serif'
 
 # --- chart scales -----------------------------------------------------------
 #: Max 5 categories. More than that and the chart should aggregate instead —
