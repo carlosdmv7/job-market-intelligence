@@ -68,6 +68,7 @@ ACCENT = RUST_500
 PORTFOLIO_URL = "https://carlosdmv7.github.io/personal-portfolio/"
 AUTHOR = "Carlos De Manuel"
 AUTHOR_ROLE = "Data & Analytics Engineer"
+LINKEDIN_URL = "https://www.linkedin.com/in/carlos-de-manuel"
 
 Tone = Literal["neutral", "good", "warn", "bad"]
 
@@ -191,12 +192,19 @@ def render_freshness(facts: Sequence[Fact]) -> None:
                 st.markdown(f"- **{f.value}** {f.label} — {f.help}")
 
 
-def render_footer(*, repo_url: str | None = None, note: str | None = None) -> None:
-    """Closing rule + provenance line. Mirrors the portfolio site's footer."""
+def render_footer(*, repo_url: str | None = None) -> None:
+    """Closing rule + who built it and where to read the code.
+
+    The same line as the sibling spanish-housing-radar app, so the two read as
+    one portfolio. The name is the link to the portfolio; the byline above the
+    title keeps its "← portfolio", because there the name is not a link.
+    """
     st.divider()
-    parts = [f"**{AUTHOR}** · {AUTHOR_ROLE}", f"[Portfolio]({PORTFOLIO_URL})"]
+    parts = [
+        f"Built by [{AUTHOR}]({PORTFOLIO_URL})",
+        f":gray[{AUTHOR_ROLE}]",
+        f"[LinkedIn]({LINKEDIN_URL})",
+    ]
     if repo_url:
         parts.append(f"[Source]({repo_url})")
-    st.caption(" · ".join(parts))
-    if note:
-        st.caption(note)
+    st.markdown(":small[" + " · ".join(parts) + "]")

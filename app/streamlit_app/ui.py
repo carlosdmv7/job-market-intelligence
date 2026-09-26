@@ -380,11 +380,4 @@ def demo_notice() -> None:
 def page_footer() -> None:
     from streamlit_app.theme import render_footer
 
-    render_footer(
-        repo_url=REPO_URL,
-        note=(
-            "Every figure on this page is queried at page load — from the MotherDuck "
-            "marts, or from the committed sample when running without credentials. "
-            "Nothing here is hardcoded."
-        ),
-    )
+    render_footer(repo_url=REPO_URL)
