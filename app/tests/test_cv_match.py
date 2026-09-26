@@ -25,19 +25,45 @@ def test_extract_skills_symbol_heavy_terms():
 
 
 def test_useful_vocabulary_drops_generic_terms():
-    assert useful_vocabulary(["python", "Data", "AI", "dbt", "cloud"]) == ["python", "dbt"]
+    assert useful_vocabulary(["python", "Data", "AI", "dbt", "cloud", "Analytics", "BI"]) == [
+        "python",
+        "dbt",
+    ]
 
 
-def test_score_jobs_tiebreak_prefers_more_evidence():
+def test_useful_vocabulary_keeps_one_spelling_of_each_term():
+    vocab = ["machine learning", "python", "Machine Learning", "PYTHON"]
+    assert useful_vocabulary(vocab) == ["machine learning", "python"]
+
+
+def test_score_jobs_discounts_thin_evidence():
     jobs = pd.DataFrame(
         {
-            "title": ["thin", "rich"],
-            "technologies": [["python"], ["python", "dbt", "sql"]],
+            "title": ["one of one", "five of six"],
+            "technologies": [["python"], ["python", "dbt", "sql", "airflow", "aws", "kafka"]],
             "last_seen_at": pd.to_datetime(["2026-07-19"] * 2),
         }
     )
-    ranked = score_jobs(jobs, ["python", "dbt", "sql"])
-    assert list(ranked["title"]) == ["rich", "thin"]  # both 100%, more techs first
+    ranked = score_jobs(jobs, ["python", "dbt", "sql", "airflow", "aws"])
+    # 1/1 used to score 100% and rank above 5/6; with one unnamed requirement
+    # assumed it is 50% against 71%.
+    assert list(ranked["title"]) == ["five of six", "one of one"]
+    assert ranked.iloc[0]["match_pct"] == 5 / 7
+    assert ranked.iloc[1]["match_pct"] == 1 / 2
+
+
+def test_score_jobs_ignores_generic_terms_on_both_sides():
+    jobs = pd.DataFrame(
+        {
+            "title": ["with generics", "only generics"],
+            "technologies": [["ai", "analytics", "python"], ["ai", "data science"]],
+            "last_seen_at": pd.to_datetime(["2026-07-19"] * 2),
+        }
+    )
+    ranked = score_jobs(jobs, ["python"])
+    assert list(ranked["title"]) == ["with generics"]  # nothing left to score in the other
+    assert ranked.iloc[0]["missing"] == []  # "ai" is not a gap the CV could ever close
+    assert ranked.iloc[0]["n_techs"] == 1
 
 
 def test_score_jobs_overlap_and_na_safety():
@@ -51,8 +77,8 @@ def test_score_jobs_overlap_and_na_safety():
     ranked = score_jobs(jobs, ["python", "dbt"])
 
     assert list(ranked["title"]) == ["perfect", "half", "none"]  # NA row dropped, sorted
-    assert ranked.iloc[0]["match_pct"] == 1.0
-    assert ranked.iloc[1]["match_pct"] == 0.5
+    assert ranked.iloc[0]["match_pct"] == 2 / 3
+    assert ranked.iloc[1]["match_pct"] == 1 / 3
     assert ranked.iloc[1]["missing"] == ["kafka"]
     assert ranked.iloc[2]["match_pct"] == 0.0
 
