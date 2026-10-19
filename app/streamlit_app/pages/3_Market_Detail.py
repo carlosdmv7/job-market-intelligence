@@ -220,7 +220,7 @@ with stack_col:
     if stacks.empty:
         st.info("No technologies extracted for this market yet.")
     else:
-        ui.show(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title="open roles"))
+        ui.altair_chart(ui.hbar(stacks, "tech", "roles", color=ui.ACCENT, value_title="open roles"))
         st.caption(
             "⚠️ **Read this within the market, never across markets.** A stack "
             "looks rarer in Spain than in Sweden because Spanish ads are "
@@ -268,7 +268,7 @@ companies = run_df(
     params,
 )
 if not companies.empty:
-    ui.show(ui.hbar(companies, "company_name", "open_roles", value_title="open roles"))
+    ui.altair_chart(ui.hbar(companies, "company_name", "open_roles", value_title="open roles"))
 
 # --- the Netherlands-only auditable signal ----------------------------------
 # One market publishes a machine-readable register of who may legally sponsor a

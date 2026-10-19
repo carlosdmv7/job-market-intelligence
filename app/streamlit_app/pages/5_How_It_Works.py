@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from string import Template
 
 import pandas as pd
 import streamlit as st
+from brand.tokens import BORDER, INK, INK_MUTED_2, RUST_500, RUST_700, SURFACE, SURFACE_2
 from streamlit_app import ui
 from streamlit_app.db import require_marts, run_df
 from streamlit_app.freshness import dbt_run_facts, sponsor_seed_facts
@@ -55,51 +57,61 @@ st.markdown(
 )
 
 st.graphviz_chart(
-    """
+    Template(
+        """
 digraph pipeline {
   rankdir=LR;
   bgcolor="transparent";
   node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10,
-        color="#E4D9C4", fillcolor="#FDFAF4", fontcolor="#274C56", margin="0.14,0.09"];
-  edge [color="#A8501F", arrowsize=0.6, penwidth=1.1];
+        color="$border", fillcolor="$surface", fontcolor="$ink", margin="0.14,0.09"];
+  edge [color="$rust_700", arrowsize=0.6, penwidth=1.1];
 
   subgraph cluster_src {
     label="1 · Collect  (free APIs, daily)"; fontname="Helvetica"; fontsize=9;
-    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    fontcolor="$ink_muted_2"; color="$border"; style="rounded";
     adzuna [label="Adzuna\nNL · DE · ES"];
     jobtech [label="JobTech\nSE"];
     ats [label="Employers' own boards\nIE · Greenhouse · Ashby"];
     boards [label="Remote boards\nRemotive · Arbeitnow · RemoteOK"];
   }
 
-  raw [label="raw.raw_job_postings\nappend-only log", fillcolor="#F5EFE3"];
+  raw [label="raw.raw_job_postings\nappend-only log", fillcolor="$surface_2"];
 
   subgraph cluster_llm {
     label="2 · Read  (LLM, free tier)"; fontname="Helvetica"; fontsize=9;
-    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    fontcolor="$ink_muted_2"; color="$border"; style="rounded";
     llm [label="Gemini\n10 postings per request\n20 requests/day"];
-    enr [label="raw.raw_job_enrichment\nstack · seniority · language", fillcolor="#F5EFE3"];
+    enr [label="raw.raw_job_enrichment\nstack · seniority · language", fillcolor="$surface_2"];
   }
 
   ind [label="IND sponsor register\nscraped monthly → dbt seed"];
 
   subgraph cluster_dbt {
     label="3 · Model  (dbt, tested)"; fontname="Helvetica"; fontsize=9;
-    fontcolor="#6B7B80"; color="#E4D9C4"; style="rounded";
+    fontcolor="$ink_muted_2"; color="$border"; style="rounded";
     staging [label="staging"];
     dedup [label="de-duplicate\nby content hash"];
-    marts [label="marts\nFT_JOB_POSTING\nFT_JOB_SNAPSHOT_DAILY", fillcolor="#F5EFE3"];
+    marts [label="marts\nFT_JOB_POSTING\nFT_JOB_SNAPSHOT_DAILY", fillcolor="$surface_2"];
   }
 
-  app [label="This app", fillcolor="#F5EFE3", color="#D96C2C"];
+  app [label="This app", fillcolor="$surface_2", color="$rust_500"];
 
   adzuna -> raw; jobtech -> raw; ats -> raw; boards -> raw;
-  raw -> llm [label="  not yet read", fontsize=8, fontcolor="#6B7B80"];
+  raw -> llm [label="  not yet read", fontsize=8, fontcolor="$ink_muted_2"];
   llm -> enr;
   raw -> staging; enr -> staging; ind -> staging;
   staging -> dedup -> marts -> app;
 }
 """
+    ).substitute(
+        border=BORDER,
+        surface=SURFACE,
+        surface_2=SURFACE_2,
+        ink=INK,
+        ink_muted_2=INK_MUTED_2,
+        rust_500=RUST_500,
+        rust_700=RUST_700,
+    )
 )
 
 with st.expander("Why postings are never overwritten"):

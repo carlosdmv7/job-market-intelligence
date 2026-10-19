@@ -75,7 +75,7 @@ if go and question.strip():
     if df.shape[1] == 2 and numeric.shape[1] == 1 and 1 <= len(df) <= 30:
         label = next(c for c in df.columns if c not in numeric.columns)
         value = numeric.columns[0]
-        ui.show(ui.hbar(df, label, value, value_title=value.replace("_", " ")))
+        ui.altair_chart(ui.hbar(df, label, value, value_title=value.replace("_", " ")))
     ui.table(df)
 
 ui.page_footer()

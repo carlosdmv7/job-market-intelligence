@@ -7,6 +7,10 @@ dependencies = [
     "jmi-core",
     "jmi-enrichment",
     "streamlit>=1.60",
+    # The shared design system: tokens, chart theme, page chrome, and the
+    # generator of .streamlit/config.toml's [theme]. A PEP 508 direct reference,
+    # so any installer resolves this exact commit, never a same-named PyPI package.
+    "brand[streamlit] @ git+https://github.com/carlosdmv7/brand@c3973c4a16bbbe57905ccc7d83a6cb94378b3bba",
     "pandas>=2.2",
     "pypdf>=5",  # CV Match: extract text from an uploaded PDF, in-session only
 ]
@@ -14,6 +18,9 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true  # the git pin on brand above
 
 [tool.hatch.build.targets.wheel]
 packages = ["streamlit_app"]

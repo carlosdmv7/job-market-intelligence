@@ -1,7 +1,7 @@
 """App-specific visual layer on top of the portable brand chrome.
 
-Everything colour- or typography-related comes from :mod:`streamlit_app.theme`
-(the drop-in shared file); this module adds only what is specific to *this*
+Everything colour- or typography-related comes from the shared ``brand``
+package (github.com/carlosdmv7/brand); this module adds only what is specific to *this*
 domain — market labels, the visa vocabulary, and the chart helpers built on
 them. Only current APIs: ``alt.theme`` (Altair 6) and ``width="stretch"``
 (Streamlit), no CSS injection.
@@ -13,16 +13,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import altair as alt
+import brand.altair
 import streamlit as st
-
-from streamlit_app.theme import (
-    PETROL_900,
-    RUST_500,
-    RUST_700,
-    SURFACE,
-    TEAL_700,
-    show,
-)
+from brand.streamlit import altair_chart
+from brand.tokens import PETROL_900, RUST_500, RUST_700, SURFACE, TEAL_700
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -32,15 +26,22 @@ __all__ = [
     "MARKETS",
     "SPONSORSHIP_SQL",
     "VISA_LABELS",
+    "altair_chart",
     "flag",
     "hbar",
     "market_label",
     "market_wide",
     "share_column",
-    "show",
     "table",
     "visa_label",
 ]
+
+#: Market labels carry flag emoji, chart axes included, and Windows has no flag
+#: glyphs. The same flags-only font as .streamlit/config.toml goes first in
+#: every chart font stack; it covers only the flag range, so everything else
+#: still renders in the brand's fonts.
+FLAGS_FONT = "Twemoji Country Flags"
+brand.altair.register(font_prefix=[FLAGS_FONT])
 
 # Re-exported so pages import their colours from one place.
 PRIMARY = PETROL_900
@@ -377,11 +378,12 @@ def configure_page(page_title: str, *, layout: Literal["centered", "wide"] = "wi
 
 def page_header(*, title: str, subtitle: str | None = None, freshness: bool = True) -> None:
     """Brand line + title + the live data-trust strip, in that order."""
+    from brand.streamlit import render_header
+
     from streamlit_app import freshness as freshness_mod
-    from streamlit_app.theme import render_header
 
     facts = freshness_mod.header_facts() if freshness else ()
-    render_header(title=title, subtitle=subtitle, facts=facts)
+    render_header(title, subtitle or "", facts, explain_facts=True)
     demo_notice()
 
 
@@ -415,6 +417,6 @@ def demo_notice() -> None:
 
 
 def page_footer() -> None:
-    from streamlit_app.theme import render_footer
+    from brand.streamlit import render_footer
 
     render_footer(repo_url=REPO_URL)

@@ -1,6 +1,6 @@
 """Chart builders for the Overview — the stack mix by market and the daily flow.
 
-Each returns an Altair chart; ``theme.show`` renders it with the brand theme.
+Each returns an Altair chart; ``ui.altair_chart`` renders it with the brand theme.
 Colour carries meaning only: the heat ramp is the brand's sequential scale, and
 the daily bars are petrol with the pipeline's partial sweeps drawn as hairline
 grey so they read as missing data, not as a quiet day.
@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import altair as alt
 import pandas as pd
-
-from streamlit_app.theme import BORDER, INK, INK_MUTED, PETROL_900, RUST_500, SEQUENTIAL
+from brand.tokens import BORDER, INK, INK_MUTED, PETROL_900, RUST_500, SEQUENTIAL, SURFACE
 
 
 def heatmap_stack_mix(df: pd.DataFrame, markets: list[str]) -> alt.LayerChart:
@@ -41,7 +40,7 @@ def heatmap_stack_mix(df: pd.DataFrame, markets: list[str]) -> alt.LayerChart:
         ),
         y=alt.Y("tech:N", sort=order, title=None, axis=alt.Axis(domain=False, ticks=False)),
     )
-    cells = base.mark_rect(cornerRadius=3, stroke="#FDFAF4", strokeWidth=2).encode(
+    cells = base.mark_rect(cornerRadius=3, stroke=SURFACE, strokeWidth=2).encode(
         color=alt.Color(
             "share:Q",
             scale=alt.Scale(range=SEQUENTIAL[:4], domain=[0, top]),

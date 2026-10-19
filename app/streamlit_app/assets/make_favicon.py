@@ -13,11 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from brand.tokens import PETROL_900, RUST_500, SAND_100
 from PIL import Image, ImageDraw
-
-PETROL_900 = "#274C56"
-SAND_100 = "#F6E2B3"
-RUST_500 = "#D96C2C"
 
 SIZE = 512  # rendered big, downsampled for clean antialiasing
 OUT = Path(__file__).with_name("favicon.png")

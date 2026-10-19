@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from brand.streamlit import altair_chart
 from streamlit_app import ui
 from streamlit_app.charts import bar_daily_new_roles, heatmap_stack_mix
 from streamlit_app.db import require_marts, run_df
-from streamlit_app.theme import show
 
 ui.configure_page("EU data jobs")
 
@@ -151,7 +151,7 @@ with mix_col:
         )
         mix = mix.set_index(["country_code", "tech"]).reindex(grid, fill_value=0).reset_index()
         mix["market"] = mix["country_code"].map(ui.market_label)
-        show(heatmap_stack_mix(mix, [ui.market_label(c) for c in order]))
+        altair_chart(heatmap_stack_mix(mix, [ui.market_label(c) for c in order]))
         st.caption(
             "Each column is one market's mix: of every technology its postings name, "
             "the share that is this one. Markets are read at different depths — "
@@ -214,7 +214,7 @@ with new_col:
 # --- the flow ---------------------------------------------------------------
 if not daily.empty:
     st.markdown("#### New data roles, day by day")
-    show(bar_daily_new_roles(daily))
+    altair_chart(bar_daily_new_roles(daily))
     st.caption(
         "Roles first seen on a board each day, with the 7-day average. Grey days are "
         "partial sweeps — the pipeline tracked far fewer postings than usual — so "
