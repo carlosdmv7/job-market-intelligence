@@ -100,7 +100,7 @@ by_country["english_share"] = 100 * by_country["written_in_english"] / by_countr
 
 c1, c2 = st.columns([3, 2], gap="large")
 with c1:
-    ui.show(ui.hbar(by_country, "market", "open_roles", value_title=UNIT))
+    ui.altair_chart(ui.hbar(by_country, "market", "open_roles", value_title=UNIT))
 with c2:
     ui.table(
         by_country[["market", "open_roles", "companies", "english_share"]],
@@ -174,7 +174,7 @@ if stacks.empty:
 else:
     s1, s2 = st.columns([2, 3], gap="large")
     with s1:
-        ui.show(
+        ui.altair_chart(
             ui.hbar(
                 stacks,
                 "tech",
@@ -209,7 +209,7 @@ else:
         if stack_trend["date_key"].nunique() < 2:
             st.info("Needs at least two snapshot days.")
         else:
-            ui.show(
+            ui.altair_chart(
                 alt.Chart(stack_trend)
                 .mark_line(strokeWidth=2)
                 .encode(
@@ -256,7 +256,7 @@ else:
         f"{SWEEP_CAP} postings a day. {LEFT_OUT} days are left out: the pipeline's "
         "ramp-up and its partial sweeps, whose low counts were the scraper, not the market."
     )
-    ui.show(
+    ui.altair_chart(
         alt.Chart(daily)
         .mark_area(
             line={"color": ui.PRIMARY, "strokeWidth": 2},
@@ -297,7 +297,7 @@ else:
     st.markdown("###### By country")
     # No point markers: five series over 60+ days turned the lines into a
     # stipple where the trend used to be.
-    ui.show(
+    ui.altair_chart(
         alt.Chart(market_trend)
         .mark_line(strokeWidth=2)
         .encode(
@@ -326,6 +326,6 @@ companies = run_df(
     group by 1 order by open_roles desc limit 12
     """
 )
-ui.show(ui.hbar(companies, "company_name", "open_roles", value_title=UNIT))
+ui.altair_chart(ui.hbar(companies, "company_name", "open_roles", value_title=UNIT))
 
 ui.page_footer()

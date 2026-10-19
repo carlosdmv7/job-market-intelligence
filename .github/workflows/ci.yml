@@ -32,6 +32,11 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
+      # The [theme] tables of .streamlit/config.toml are generated from the
+      # shared brand package; fails on a hand edit or an un-synced brand bump.
+      - name: Brand theme in sync
+        run: uv run brand sync streamlit --font-prefix "Twemoji Country Flags" --check
+
       - name: mypy
         run: uv run mypy libs scrapers enrichment orchestration app evals
 

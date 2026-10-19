@@ -270,6 +270,17 @@ wheels = [
 ]
 
 [[package]]
+name = "brand"
+version = "0.2.0"
+source = { git = "https://github.com/carlosdmv7/brand?rev=c3973c4a16bbbe57905ccc7d83a6cb94378b3bba#c3973c4a16bbbe57905ccc7d83a6cb94378b3bba" }
+
+[package.optional-dependencies]
+streamlit = [
+    { name = "altair" },
+    { name = "streamlit" },
+]
+
+[[package]]
 name = "burner-redis"
 version = "0.1.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1414,6 +1425,7 @@ name = "jmi-app"
 version = "0.1.0"
 source = { editable = "app" }
 dependencies = [
+    { name = "brand", extra = ["streamlit"] },
     { name = "jmi-core" },
     { name = "jmi-enrichment" },
     { name = "pandas" },
@@ -1423,6 +1435,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "brand", extras = ["streamlit"], git = "https://github.com/carlosdmv7/brand?rev=c3973c4a16bbbe57905ccc7d83a6cb94378b3bba" },
     { name = "jmi-core", editable = "libs/jmi_core" },
     { name = "jmi-enrichment", editable = "enrichment" },
     { name = "pandas", specifier = ">=2.2" },

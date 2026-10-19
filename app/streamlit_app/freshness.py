@@ -21,9 +21,9 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from brand.streamlit import StripItem, Tone
 
 from streamlit_app.db import run_df
-from streamlit_app.theme import Fact, Tone
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SEED_META = _REPO_ROOT / "dbt" / "jmi" / "seeds" / "recognised_sponsors.meta.json"
@@ -130,9 +130,9 @@ def dbt_run_facts() -> dict[str, Any]:
     return {} if df.empty else df.iloc[0].to_dict()
 
 
-def header_facts() -> list[Fact]:
+def header_facts() -> list[StripItem]:
     """Assemble the strip. Never raises: a broken source degrades to 'unknown'."""
-    facts: list[Fact] = []
+    facts: list[StripItem] = []
 
     try:
         wh = _warehouse_facts()
@@ -144,7 +144,7 @@ def header_facts() -> list[Fact]:
     if wh:
         age, tone = _age(wh["last_run"])
         facts.append(
-            Fact(
+            StripItem(
                 "last pipeline run",
                 age,
                 tone,
@@ -152,7 +152,7 @@ def header_facts() -> list[Fact]:
             )
         )
         facts.append(
-            Fact(
+            StripItem(
                 "open data roles",
                 f"{wh['open_roles']:,}",
                 help=(
@@ -161,9 +161,9 @@ def header_facts() -> list[Fact]:
                 ),
             )
         )
-        facts.append(Fact("companies hiring", f"{wh['companies']:,}"))
+        facts.append(StripItem("companies hiring", f"{wh['companies']:,}"))
         facts.append(
-            Fact(
+            StripItem(
                 "with tech stack read",
                 f"{wh['stack_coverage']:.0%}",
                 "warn" if wh["stack_coverage"] < 0.5 else "good",
@@ -176,7 +176,7 @@ def header_facts() -> list[Fact]:
             )
         )
     else:
-        facts.append(Fact("warehouse", "unreachable", "bad"))
+        facts.append(StripItem("warehouse", "unreachable", "bad"))
 
     # The IND seed size and the dbt test tally used to sit here. Both are
     # engineering provenance — proof the thing is wired correctly — and neither

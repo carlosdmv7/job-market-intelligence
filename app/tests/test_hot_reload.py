@@ -12,7 +12,7 @@ import pytest
 from streamlit_app import hot_reload
 
 ROOT = Path(__file__).resolve().parents[2]
-THEME = ROOT / "app" / "streamlit_app" / "theme.py"
+CHARTS = ROOT / "app" / "streamlit_app" / "charts.py"
 
 
 @pytest.fixture
@@ -42,35 +42,36 @@ def _bump(path: Path, to: float):
 
 @pytest.mark.usefixtures("clean_state")
 def test_one_changed_file_drops_every_repo_module():
-    for name in ("streamlit_app.theme", "streamlit_app.ui", "streamlit_app.charts"):
+    for name in ("streamlit_app.freshness", "streamlit_app.ui", "streamlit_app.charts"):
         importlib.import_module(name)
     hot_reload.drop_stale(ROOT)  # first run of the process: drop + record
-    for name in ("streamlit_app.theme", "streamlit_app.ui", "streamlit_app.charts"):
+    for name in ("streamlit_app.freshness", "streamlit_app.ui", "streamlit_app.charts"):
         importlib.import_module(name)
     assert hot_reload.drop_stale(ROOT) == []  # nothing changed, nothing dropped
 
-    stat = _bump(THEME, THEME.stat().st_mtime + 5)  # the pull rewrote theme.py only
+    stat = _bump(CHARTS, CHARTS.stat().st_mtime + 5)  # the pull rewrote charts.py only
     try:
         dropped = set(hot_reload.drop_stale(ROOT))
     finally:
-        os.utime(THEME, (stat.st_atime, stat.st_mtime))
-    # ui and charts did not change, but they hold theme's objects.
-    assert {"streamlit_app.theme", "streamlit_app.ui", "streamlit_app.charts"} <= dropped
+        os.utime(CHARTS, (stat.st_atime, stat.st_mtime))
+    # ui and freshness did not change, but a full drop is what keeps them
+    # from holding the old charts' objects.
+    assert {"streamlit_app.freshness", "streamlit_app.ui", "streamlit_app.charts"} <= dropped
 
 
 @pytest.mark.usefixtures("clean_state")
 def test_a_pull_before_the_second_run_is_still_seen():
     if hasattr(sys, hot_reload._STATE_ATTR):
         delattr(sys, hot_reload._STATE_ATTR)
-    sys.modules.pop("streamlit_app.theme", None)
+    sys.modules.pop("streamlit_app.charts", None)
     hot_reload.drop_stale(ROOT)
-    importlib.import_module("streamlit_app.theme")  # imported after the drop: no baseline
+    importlib.import_module("streamlit_app.charts")  # imported after the drop: no baseline
 
-    stat = _bump(THEME, time.time() + 5)  # the pull lands now
+    stat = _bump(CHARTS, time.time() + 5)  # the pull lands now
     try:
-        assert "streamlit_app.theme" in hot_reload.drop_stale(ROOT)
+        assert "streamlit_app.charts" in hot_reload.drop_stale(ROOT)
     finally:
-        os.utime(THEME, (stat.st_atime, stat.st_mtime))
+        os.utime(CHARTS, (stat.st_atime, stat.st_mtime))
 
 
 @pytest.mark.usefixtures("clean_state")
