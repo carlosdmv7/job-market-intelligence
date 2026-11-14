@@ -157,8 +157,10 @@ spend nothing where determinism suffices, spend the LLM where it earns its cost.
    provider for a match percentage, honest gaps, and concrete CV edits.
 
 The CV lives in `st.session_state` only: never written to the warehouse, a
-file, or the logs, and discarded when the tab closes. The single deep-dive
-request is the only thing that ever leaves the session. Scoring logic is pure
+file, or the logs, and discarded when the tab closes — or at once, with
+*Forget my CV*. While it is there it follows you: **Find Jobs** gains a *My fit*
+column and sort, so the filters and the score work on the same list. The single
+deep-dive request is the only thing that ever leaves the session. Scoring logic is pure
 functions in [`cv_match.py`](app/streamlit_app/cv_match.py) — no Streamlit,
 unit-tested.
 
@@ -275,7 +277,7 @@ and market trends accumulate one snapshot per day.
 | Ingestion **depth** | Uneven, measured, and surfaced in the app: Adzuna returns a ~500-character teaser per posting, JobTech the full ~4,000-character ad. The same classifier extracts ~1.0 technologies from the former and ~7.9 from the latter, so 91% of Swedish roles are stack-matchable against 30–39% of Dutch, German and Spanish ones. A source limitation, not a market fact — Market Detail says so per country rather than letting the charts imply otherwise |
 | LLM enrichment | Working; the Gemini free tier caps throughput at ~200 postings/day and the backlog is now cleared — **100% of open data roles read**. 47% yield a tech stack, and that ceiling is source depth, not quota |
 | Orchestration | Production-shaped: a Prefect Cloud deployment with its schedule, parameters and run history, served for one pass by an hourly GitHub Actions job — the free tier has no hybrid work pools, so the compute is borrowed |
-| Text-to-SQL agent | Guard-railed (SELECT-only, single statement, forced LIMIT, and a read-only connection MotherDuck enforces server-side) — not hardened against a hostile user |
+| Text-to-SQL agent | Three independent layers, each tested without the others ([ADR 0012](docs/adr/0012-the-sql-guard-is-a-parser.md)): the generated query is parsed by DuckDB itself and may read only the five marts tables; the connection is read-only with file and network access switched off and its configuration locked; and a result is interrupted after 20 s and withheld if it contains a credential. LLM calls are rationed per visitor and per day. Not audited by anyone but its author |
 | LLM evals | Harness production-grade (stratified sampler, replayed CI job, committed thresholds). 22 postings hand-labelled for the visa target — the measurement that retired that feature. **No headline accuracy is claimed** and none is planned: the question the app depends on is cross-checked against a deterministic signal at 100% coverage instead ([ADR 0010](docs/adr/0010-cross-check-instead-of-hand-labels.md)) |
 | Containerisation | None. There was Docker Compose scaffolding; it could not be built or run here, so it was deleted rather than left as an untested claim ([ADR 0008](docs/adr/0008-gemini-is-the-default-provider.md)) |
 
@@ -290,7 +292,7 @@ and market trends accumulate one snapshot per day.
 | [dbt/jmi](dbt/jmi) | Medallion project: staging → int dedup → `FT_`/`DT_` marts + seed |
 | [app](app) | Streamlit app (7 pages, top-nav) + text-to-SQL agent + the committed demo sample |
 | [evals](evals) | Golden-set eval harness (sampler, replay, metrics); scores English-sufficiency, and visa on request |
-| [docs](docs) | Architecture + 11 ADRs |
+| [docs](docs) | Architecture + 12 ADRs |
 
 ## Quickstart
 
@@ -365,6 +367,7 @@ all offline, no warehouse or LLM needed.
 9. [The app is read-only by connection, not by token](docs/adr/0009-read-only-by-connection-not-by-token.md)
 10. [Cross-check against a deterministic signal instead of hand labels](docs/adr/0010-cross-check-instead-of-hand-labels.md)
 11. [Market Detail absorbs the visa page](docs/adr/0011-market-detail-absorbs-the-visa-page.md)
+12. [The SQL guard is a parser, and the connection does not trust it](docs/adr/0012-the-sql-guard-is-a-parser.md)
 
 ## Measuring the LLM, not just using it
 

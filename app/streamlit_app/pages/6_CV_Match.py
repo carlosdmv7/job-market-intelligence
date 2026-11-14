@@ -8,21 +8,23 @@ you explicitly click the deep-dive button.
 
 from __future__ import annotations
 
-import io
+import hashlib
 
 import pandas as pd
 import streamlit as st
-from streamlit_app import ui
+from streamlit_app import limits, ui
 from streamlit_app.cv_match import (
     CV_MATCH_SYSTEM_PROMPT,
+    MAX_CV_CHARS,
+    CVUnreadable,
     build_deep_dive_prompt,
     extract_skills,
+    read_cv,
     score_jobs,
     useful_vocabulary,
 )
 from streamlit_app.db import require_marts, run_df, staging_available
 
-from jmi_core.schema import Seniority
 from jmi_core.settings import get_settings
 from jmi_core.text import strip_html
 from jmi_enrichment.providers import get_provider
@@ -61,26 +63,58 @@ require_marts(
 
 # --- CV input (session-only) -------------------------------------------------
 up, paste = st.columns(2, gap="large")
+# The inputs are keyed by a generation number so "Forget my CV" can empty them:
+# an uploader cannot be cleared through session state, only replaced, and a CV
+# still sitting in the text box would be read straight back in on the rerun.
+generation = st.session_state.get("cv_generation", 0)
 with up:
-    uploaded = st.file_uploader("Upload your CV", type=["pdf", "txt", "md"])
+    uploaded = st.file_uploader(
+        "Upload your CV", type=["pdf", "txt", "md"], key=f"cv_upload_{generation}"
+    )
 with paste:
-    pasted = st.text_area("…or paste it as text", height=120, placeholder="Paste your CV here")
+    pasted = st.text_area(
+        "…or paste it as text",
+        height=120,
+        placeholder="Paste your CV here",
+        max_chars=MAX_CV_CHARS,
+        key=f"cv_paste_{generation}",
+    )
 
-cv_text = ""
+# Streamlit drops a page's widgets when you leave it, so the uploader and the
+# text box are empty again on the way back from Find Jobs. The CV was already
+# being kept in the session; it just was never read back, and every return
+# trip meant uploading it again.
 if uploaded is not None:
-    if uploaded.name.lower().endswith(".pdf"):
-        from pypdf import PdfReader  # lazy: only needed for PDF uploads
-
-        reader = PdfReader(io.BytesIO(uploaded.getvalue()))
-        cv_text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        cv_text = uploaded.getvalue().decode("utf-8", errors="replace")
+    try:
+        cv_text = read_cv(uploaded.name, uploaded.getvalue())
+    except CVUnreadable as exc:
+        st.error(str(exc), icon=":material/error:")
+        ui.page_footer()
+        st.stop()
 elif pasted.strip():
     cv_text = pasted
+else:
+    cv_text = st.session_state.get("cv_text", "")
+
+
+def _forget_cv() -> None:
+    for key in ("cv_text", "cv_skills", "cv_skills_for", "fit_answers"):
+        st.session_state.pop(key, None)
+    st.session_state["cv_generation"] = st.session_state.get("cv_generation", 0) + 1
+
 
 if not cv_text.strip():
+    ui.page_footer()
     st.stop()
 st.session_state["cv_text"] = cv_text
+cv_id = hashlib.sha256(cv_text.encode("utf-8")).hexdigest()
+
+kept, forget = st.columns([4, 1], vertical_alignment="center")
+kept.caption(
+    f"Working from a CV of {len(cv_text):,} characters, held in this session only. "
+    "It also ranks the list on **Find Jobs** while this tab stays open."
+)
+forget.button("Forget my CV", on_click=_forget_cv, width="stretch")
 
 # --- deterministic tier: skill extraction + overlap ranking ------------------
 vocab = useful_vocabulary(
@@ -93,15 +127,25 @@ vocab = useful_vocabulary(
     )["tech"].tolist()
 )
 
-detected = extract_skills(cv_text, vocab)
+# Edits to the list survive leaving the page too, for as long as the CV is the
+# same one; a different CV starts again from what is detected in it.
+if st.session_state.get("cv_skills_for") == cv_id:
+    known = set(vocab)
+    default_skills = [s for s in st.session_state.get("cv_skills", []) if s in known]
+else:
+    default_skills = extract_skills(cv_text, vocab)
 skills = st.multiselect(
     "Skills found in your CV (edit if something was missed)",
     options=vocab,
-    default=detected,
+    default=default_skills,
+    key=f"skills_{cv_id[:12]}",
     help="The vocabulary is every technology the LLM has extracted from real postings.",
 )
+st.session_state["cv_skills"] = skills
+st.session_state["cv_skills_for"] = cv_id
 if not skills:
     st.warning("No known skills detected — add some manually to rank the postings.")
+    ui.page_footer()
     st.stop()
 
 jobs = run_df(
@@ -114,18 +158,7 @@ jobs = run_df(
     where is_enriched and is_target_role and is_active and len(technologies) > 0
     """
 )
-# Seniority is the LLM's read of the posting; "unknown" is a posting that does
-# not say, which is almost half of them — so it is its own choice, not dropped.
-LEVELS = {
-    Seniority.INTERN: "Intern",
-    Seniority.JUNIOR: "Junior",
-    Seniority.MID: "Mid",
-    Seniority.SENIOR: "Senior",
-    Seniority.LEAD: "Lead",
-    Seniority.PRINCIPAL: "Principal",
-    Seniority.MANAGER: "Manager",
-    Seniority.UNKNOWN: "Not stated",
-}
+LEVELS = ui.SENIORITY_LABELS
 levels = st.pills(
     "Level",
     options=list(LEVELS),
@@ -134,11 +167,12 @@ levels = st.pills(
     default=list(LEVELS),
     help="The level each posting asks for, as the LLM read it. Untick what isn't you.",
 )
-jobs = jobs[jobs["seniority"].fillna(Seniority.UNKNOWN).isin(levels)]
+jobs = jobs[jobs["seniority"].fillna("unknown").isin(levels)]
 
 ranked = score_jobs(jobs, skills)
 if ranked.empty:
     st.info("No open role with a parsed stack at the levels picked.")
+    ui.page_footer()
     st.stop()
 ranked["market"] = ranked["country_code"].map(ui.market_label)
 
@@ -194,19 +228,24 @@ event = st.dataframe(
 rows = ui.selected_rows(event)
 if not rows:
     st.info("Select a posting to unlock the LLM deep-dive.", icon=":material/touch_app:")
+    ui.page_footer()
     st.stop()
 
 job = ranked.iloc[rows[0]]
+company = job["company_name"] if pd.notna(job["company_name"]) else "unknown company"
 st.divider()
-st.markdown(f"#### Deep-dive: {job['title']} — {job['company_name'] or 'unknown company'}")
+st.markdown(f"#### Deep-dive: {ui.md_text(job['title'])} — {ui.md_text(company)}")
 
 settings = get_settings()
-st.caption(
-    f"One call to `{settings.llm_provider}` / `{settings.llm_model}` with this posting + "
-    "your CV. Free tier: if the daily quota is spent you'll get an error — try tomorrow."
-)
+# One answer per (CV, posting), kept for the session: the call is rationed, and
+# selecting another row or editing a skill used to throw the answer away.
+answers: dict[str, str] = st.session_state.setdefault("fit_answers", {})
+answer_key = f"{cv_id}:{job['content_hash']}"
+budget_line = st.empty()
 
-if st.button("Analyze my fit (1 LLM call)", type="primary"):
+if answer_key not in answers and st.button(
+    "Analyze my fit (1 LLM call)", type="primary", disabled=limits.llm_calls_left() == 0
+):
     # The deep-dive reads better with the full text, but it is not required:
     # the extracted stack alone still gives the model something concrete. The
     # demo sample has no staging schema, and this path sits behind a button, so
@@ -225,12 +264,30 @@ if st.button("Analyze my fit (1 LLM call)", type="primary"):
         description=description,
         technologies=list(job["technologies"]),
     )
-    with st.spinner("Reading your CV against the posting…"):
-        try:
-            answer = get_provider(settings).complete(system=CV_MATCH_SYSTEM_PROMPT, user=prompt)
-        except Exception as exc:
-            st.error(f"The LLM call failed (likely a spent free-tier quota): {exc}")
-            st.stop()
-    st.markdown(answer)
+    if not limits.spend_llm_call():
+        st.warning(limits.budget_caption())
+    else:
+        with st.spinner("Reading your CV against the posting…"):
+            try:
+                answers[answer_key] = get_provider(settings).complete(
+                    system=CV_MATCH_SYSTEM_PROMPT, user=prompt
+                )
+            except Exception as exc:
+                st.error(
+                    "The LLM call failed — most often the free tier's daily quota. "
+                    f"Try again later. ({type(exc).__name__})"
+                )
+
+if answer_key in answers:
+    st.markdown(ui.strip_md_images(answers[answer_key]))
+    st.caption(
+        "Written by a model from the posting and your CV. Check the gaps against the "
+        "original posting before acting on them."
+    )
+
+budget_line.caption(
+    f"One call to `{settings.llm_provider}` / `{settings.llm_model}` with this posting + "
+    f"your CV, on a free tier, so calls are rationed. {limits.budget_caption()}"
+)
 
 ui.page_footer()

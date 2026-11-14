@@ -40,7 +40,12 @@ class ClassificationError(RuntimeError):
 # embed the API key in the failing URL. Those messages are surfaced verbatim in
 # the Streamlit app, which is public — so every provider error is scrubbed
 # before it becomes an exception message.
-_SECRET_QS_RE = re.compile(r"([?&](?:key|api_key|access_token)=)[^&\s'\"]+", re.IGNORECASE)
+#
+# ``motherduck_token`` is in the list for the same reason: the warehouse layer
+# puts the token on the connection string, and a driver error can quote it.
+_SECRET_QS_RE = re.compile(
+    r"([?&](?:key|api_key|access_token|motherduck_token)=)[^&\s'\"]+", re.IGNORECASE
+)
 
 
 def redact(text: str) -> str:

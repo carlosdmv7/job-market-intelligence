@@ -69,6 +69,14 @@ class Settings(BaseSettings):
         default=10, ge=1, validation_alias="JMI_ENRICHMENT_POSTINGS_PER_REQUEST"
     )
 
+    #: LLM calls the public app may make in a rolling 24 hours, across every
+    #: visitor (Ask the Data and the My Fit deep-dive). The free tier is counted
+    #: in requests per day and the app shares it with the daily enrichment, so
+    #: this is the share visitors get. Raise it on a paid key.
+    app_llm_calls_per_day: int = Field(
+        default=10, ge=0, validation_alias="JMI_APP_LLM_CALLS_PER_DAY"
+    )
+
     # --- Ollama, for a fully-local run on a machine with the RAM for it ---
     ollama_host: str = Field(default="http://localhost:11434", validation_alias="JMI_OLLAMA_HOST")
     # Cap CPU threads so local inference doesn't peg the laptop (heat/throttle).

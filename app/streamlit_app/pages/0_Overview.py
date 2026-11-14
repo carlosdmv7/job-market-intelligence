@@ -195,17 +195,21 @@ with new_col:
     for job in newest.itertuples():
         with st.container(border=True):
             st.markdown(
-                f"**{job.title}**  \n{job.company_name} · {ui.market_label(job.country_code)}"
+                f"**{ui.md_text(job.title)}**  \n"
+                f"{ui.md_text(job.company_name or 'Unknown company')} · "
+                f"{ui.market_label(job.country_code)}"
             )
             raw = job.technologies
             # A posting the LLM has not read has no list at all — None or pd.NA,
             # depending on the connection — not an empty one.
             techs = [] if raw is None or pd.api.types.is_scalar(raw) else list(raw)[:4]
-            chips = " ".join(f":gray-badge[{t}]" for t in techs)
+            chips = " ".join(f":gray-badge[{ui.md_text(t)}]" for t in techs)
             posted = pd.Timestamp(job.posted_at)
+            url = ui.safe_url(job.url)
+            # Angle brackets: a URL with a ")" in it would otherwise end the link.
+            link = f" · [open ↗](<{url}>)" if url and ">" not in url else ""
             st.markdown(
-                (chips + "  \n" if chips else "")
-                + f":small[:gray[Posted {posted:%-d %b}] · [open ↗]({job.url})]"
+                (chips + "  \n" if chips else "") + f":small[:gray[Posted {posted:%-d %b}]{link}]"
             )
     st.page_link(
         "pages/1_Job_Explorer.py", label="Browse every open role", icon=":material/arrow_forward:"

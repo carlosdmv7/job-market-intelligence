@@ -526,22 +526,30 @@ st.markdown(
     "which is validated before execution — and the generated SQL is always "
     "shown, so you can audit exactly what ran."
 )
-with st.expander("The four checks"):
+with st.expander("The three layers"):
     st.markdown(
         """
-1. **SELECT/WITH-only** — a single statement; any DDL/DML keyword is rejected.
-2. **marts schema only** — the prompt never exposes raw or staging.
-3. **Forced LIMIT** — capped at 500 rows.
-4. **Read-only connection** — even a guard bypass cannot write.
+1. **The query is parsed, not pattern-matched.** DuckDB's own parser turns it
+   into a syntax tree, which must be a single `SELECT` reading only the five
+   marts tables (or its own CTEs). No file or URL reads, no configuration
+   functions, no table function but `unnest`, and a `LIMIT` of at most 500 on
+   the outer query.
+2. **The connection is locked down.** Read-only — **MotherDuck refuses a write
+   server-side** — with file and network access switched off in the engine and
+   its configuration locked, so a query that got past the first layer still
+   cannot read a file or fetch a URL.
+3. **The result is checked.** A generated query runs on its own cursor, is
+   stopped after 20 seconds, and its result is withheld if it contains a
+   credential.
 
-The first three are checks in this repo's code, so they fail the way code
-fails. The fourth is the one that holds when the other three are wrong, so it
-is not this app's promise to keep: the connection is opened read-only and
-**MotherDuck refuses the write server-side**. The token itself is read/write,
-because the free plan issues no other kind — which is exactly why the
-guarantee is placed on the connection instead. There is no fallback to a
-writable connection; without a read-only one the app serves the committed
-sample and says so.
+Each layer holds if the other two are wrong, and each is tested without them.
+The first one used to be a keyword blocklist, which knew what a query could
+*write* and nothing about what a `SELECT` can *read* — in DuckDB, that includes
+files. The token itself is read/write, because the free plan issues no other
+kind, which is why none of this rests on it. There is no fallback to a looser
+connection; without a locked-down read-only one the app serves the committed
+sample and says so. LLM calls are also rationed, per visitor and per day: the
+free tier is one pool, shared with the pipeline.
 """
     )
 
