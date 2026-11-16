@@ -1,0 +1,12 @@
+# The workflows pin every action to a commit SHA, because a tag can be moved:
+# whoever controls `some-action@v3` controls what runs next to this repo's
+# MotherDuck, Prefect and Gemini secrets. A pin that is never updated is its
+# own problem, so Dependabot proposes the bumps and a human reads them.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

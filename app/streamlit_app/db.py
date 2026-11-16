@@ -15,6 +15,7 @@ against everywhere else, so :func:`is_demo` is surfaced in the UI.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 
 import duckdb
@@ -23,6 +24,7 @@ import streamlit as st
 
 from jmi_core.settings import get_settings
 from jmi_core.warehouse import Warehouse
+from jmi_enrichment.providers import redact
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo"
 
@@ -41,12 +43,28 @@ def demo_available() -> bool:
     return DEMO_DIR.is_dir() and (DEMO_DIR / "FT_JOB_POSTING.parquet").exists()
 
 
+def _lock_down(conn: duckdb.DuckDBPyConnection) -> None:
+    """Cut the connection off from everything except the database it is on.
+
+    DuckDB is an engine that reads files and URLs from plain SQL —
+    ``read_text('/proc/self/environ')``, ``read_csv('https://…')`` — and this
+    connection also runs SQL an LLM wrote from a stranger's question. With
+    external access off the engine itself refuses those, whatever got past the
+    guard in ``agent.py``; locking the configuration stops a later statement
+    switching it back on. Both hold for every cursor made from ``conn``, and
+    neither affects the MotherDuck attachment, which is not file access.
+    """
+    conn.execute("set enable_external_access = false")
+    conn.execute("set lock_configuration = true")
+
+
 @st.cache_resource
 def _demo_connection() -> duckdb.DuckDBPyConnection:
-    """In-memory DuckDB with views over the committed parquet sample.
+    """In-memory DuckDB holding the committed parquet sample.
 
-    Views, not tables: the parquet stays on disk and nothing is copied into
-    memory until a query actually touches it.
+    Tables, not views over ``read_parquet``: a view reads its file on every
+    query, which would need the file access :func:`_lock_down` removes. The
+    sample is a few hundred kilobytes, so it is loaded once and the door shut.
     """
     conn = duckdb.connect(":memory:")
     for schema in ("marts", "meta"):
@@ -55,8 +73,10 @@ def _demo_connection() -> duckdb.DuckDBPyConnection:
         path = DEMO_DIR / f"{stem}.parquet"
         if path.exists():
             conn.execute(
-                f"create or replace view {qualified} as select * from read_parquet('{path}')"
+                f"create or replace table {qualified} as select * from read_parquet(?)",
+                [str(path)],
             )
+    _lock_down(conn)
     return conn
 
 
@@ -104,7 +124,8 @@ def _live_connection() -> duckdb.DuckDBPyConnection | None:
     still claiming a read-only connection as its fourth guardrail.
 
     Losing the connection entirely is the better failure: it lands in demo
-    mode, which says so on every page.
+    mode, which says so on every page. The same goes for :func:`_lock_down`:
+    a connection that cannot be locked down is not served.
     """
     s = get_settings()
     try:
@@ -112,6 +133,7 @@ def _live_connection() -> duckdb.DuckDBPyConnection | None:
         # Connecting can succeed lazily; force a real round trip so a bad
         # token fails here rather than on the first page that queries.
         wh.conn.execute("select 1")
+        _lock_down(wh.conn)
         return wh.conn
     except Exception:
         return None
@@ -134,13 +156,73 @@ def _connection() -> duckdb.DuckDBPyConnection:
     )
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, max_entries=500, show_spinner=False)
 def run_df(sql: str, params: tuple | None = None) -> pd.DataFrame:
-    return _connection().execute(sql, list(params) if params else None).df()
+    # A cursor per query: the connection is one cached object shared by every
+    # visitor's script thread, and a DuckDB connection is not safe to use from
+    # two threads at once. Cursors are, and they are cheap.
+    cursor = _connection().cursor()
+    try:
+        return cursor.execute(sql, list(params) if params else None).df()
+    finally:
+        cursor.close()
 
 
 class WarehouseUnreachable(RuntimeError):
     """The warehouse can't be queried at all (missing/invalid token, network)."""
+
+
+class QueryRefused(RuntimeError):
+    """An untrusted query was stopped; the message is safe to show a visitor."""
+
+
+def _secrets() -> list[str]:
+    """Every credential this process holds, for :func:`run_untrusted` to look for."""
+    s = get_settings()
+    held = (
+        s.motherduck_token,
+        s.gemini_api_key,
+        s.anthropic_api_key,
+        s.adzuna_app_key,
+        s.scrapfly_key,
+    )
+    return [value for value in held if value and len(value) >= 8]
+
+
+def run_untrusted(sql: str, *, timeout_s: float = 20.0) -> pd.DataFrame:
+    """Run SQL that came out of an LLM. Two properties ``run_df`` does not need.
+
+    * **It ends.** DuckDB has no statement timeout, and one cross join is
+      enough to pin the single CPU a free host gives this app for every other
+      visitor. The query runs on its own cursor and is interrupted after
+      ``timeout_s``.
+    * **It cannot return a credential.** The guard in ``agent.py`` and
+      :func:`_lock_down` are why a secret should never reach a result; this is
+      the check that does not depend on either being complete. A result that
+      contains one is dropped, not shown.
+
+    Not cached: caching is keyed on the text of the query, and a visitor
+    chooses that text.
+    """
+    cursor = _connection().cursor()
+    timer = threading.Timer(timeout_s, cursor.interrupt)
+    timer.start()
+    try:
+        df = cursor.execute(sql).df()
+    except duckdb.InterruptException as exc:
+        raise QueryRefused(
+            f"The query ran for more than {timeout_s:.0f} seconds and was stopped. "
+            "Try a narrower question."
+        ) from exc
+    finally:
+        timer.cancel()
+        cursor.close()
+    held = _secrets()
+    if held:
+        rendered = df.to_csv(index=False)
+        if any(secret in rendered for secret in held):
+            raise QueryRefused("The result was withheld.")
+    return df
 
 
 def table_exists(qualified: str) -> bool:
@@ -188,7 +270,7 @@ def require_marts(*qualified: str, missing: str, level: str = "warning") -> None
             "A deployed app doesn't read `.env` — set `motherduck_token` and "
             "`JMI_DUCKDB_DATABASE` in the app's **Secrets**."
         )
-        st.caption(f"The database driver said: {exc}")
+        st.caption(f"The database driver said: {redact(str(exc))}")
         st.stop()
     if absent:
         getattr(st, level)(missing)

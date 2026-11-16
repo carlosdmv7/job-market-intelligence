@@ -9,15 +9,21 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only token: CI checks code out and reports a status, nothing else.
+# Without this block the job inherits the repository default, which on an
+# older repo is read/write on contents for every action it runs.
+permissions:
+  contents: read
+
 jobs:
   python:
     name: Lint, type-check, test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -47,10 +53,10 @@ jobs:
     name: LLM evals (replayed, offline)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -73,7 +79,7 @@ jobs:
 
       - name: Upload the eval report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: eval-report
           path: evals/report.json
@@ -96,10 +102,10 @@ jobs:
       DBT_DUCKDB_PATH: ${{ github.workspace }}/jmi_ci.duckdb
       JMI_DUCKDB_DATABASE: ${{ github.workspace }}/jmi_ci.duckdb
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -123,7 +129,7 @@ jobs:
 
       - name: Upload the dbt run results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dbt-run-results
           path: dbt/jmi/target/run_results.json

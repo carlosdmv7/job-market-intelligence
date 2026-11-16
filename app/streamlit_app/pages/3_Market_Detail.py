@@ -392,22 +392,25 @@ if not rows:
 
 row = df.iloc[rows[0]]
 st.divider()
-st.markdown(f"#### {row['title']} — {row['company_name'] or 'unknown company'}")
+company = row["company_name"] if pd.notna(row["company_name"]) else "unknown company"
+st.markdown(f"#### {ui.md_text(row['title'])} — {ui.md_text(company)}")
 
 d1, d2 = st.columns(2, gap="large")
 with d1:
     st.markdown("##### 🧰 What the posting asks for")
     techs = _items(row["technologies"])
     if techs:
-        st.markdown(" ".join(f"`{t}`" for t in techs))
+        st.markdown(" ".join(f":gray-badge[{ui.md_text(t)}]" for t in techs))
     else:
         st.caption(
             "No technologies named in the text. On a truncated source that usually "
             "means the ad was cut before its requirements, not that it has none."
         )
     bits = [
-        f"**Role:** {row['normalized_role']}" if pd.notna(row["normalized_role"]) else None,
-        f"**Seniority:** {row['seniority']}" if pd.notna(row["seniority"]) else None,
+        f"**Role:** {ui.md_text(row['normalized_role'])}"
+        if pd.notna(row["normalized_role"])
+        else None,
+        f"**Seniority:** {ui.md_text(row['seniority'])}" if pd.notna(row["seniority"]) else None,
     ]
     if any(bits):
         st.markdown(" · ".join(b for b in bits if b))
@@ -438,12 +441,12 @@ with d2:
             st.info("**No register match** — this company is not on the IND list.")
             st.caption("A fact about the register, not about the company's intentions.")
         if row["is_enriched"] and pd.notna(row["visa_evidence"]) and row["visa_evidence"]:
-            st.markdown(f"The model also quoted: “{row['visa_evidence']}”")
+            st.markdown(f"The model also quoted: “{ui.md_text(row['visa_evidence'])}”")
     else:
         st.markdown("##### 🗣️ Working language")
         langs = _items(row["working_languages"])
         if langs:
-            st.markdown("Named in the ad: " + ", ".join(f"`{lang}`" for lang in langs))
+            st.markdown("Named in the ad: " + ", ".join(ui.md_text(lang) for lang in langs))
         else:
             st.caption("The ad names no working language explicitly.")
         st.caption(
@@ -451,6 +454,8 @@ with d2:
             "only the Netherlands does, and that section appears when you select it."
         )
 
-st.link_button("Open the original posting ↗", row["source_url"])
+posting_url = ui.safe_url(row["source_url"])
+if posting_url:
+    st.link_button("Open the original posting ↗", posting_url)
 
 ui.page_footer()

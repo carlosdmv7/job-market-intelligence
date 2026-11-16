@@ -15,6 +15,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 from streamlit_app import ui
+from streamlit_app.cv_match import match_share
 from streamlit_app.db import require_marts, run_df, staging_available
 
 from jmi_core.text import strip_html
@@ -60,11 +61,32 @@ ORDERINGS = {
     "Salary stated": "salary_raw is null, last_seen_at desc nulls last",
 }
 
-f1, f2, f3, f4 = st.columns([2, 2, 2, 1], gap="medium")
+# A CV left on My Fit ranks this page too. Session-only, like the CV itself.
+cv_skills: list[str] = st.session_state.get("cv_skills") or []
+MY_FIT = "My fit"
+sort_options = ([MY_FIT] if cv_skills else []) + list(ORDERINGS)
+#: Rows fetched for the grid. Above every market's open roles put together, so
+#: "sort by my fit" ranks all of them and not the newest slice.
+GRID_ROWS = 2000
+
+f1, f2, f3, f4, f5 = st.columns([2, 2, 2, 2, 1.4], gap="medium")
 picked_markets = f1.multiselect("Market", market_options, default=[])
-search = f2.text_input("Title or company contains", placeholder="engineer, dbt, Spotify…")
+search = f2.text_input(
+    "Title, company or technology",
+    placeholder="engineer, dbt, Spotify…",
+    max_chars=80,
+)
 picked_techs = f3.multiselect("Technologies (LLM-extracted)", techs)
-sort = f4.selectbox("Sort by", list(ORDERINGS))
+picked_levels = f4.multiselect(
+    "Seniority",
+    list(ui.SENIORITY_LABELS),
+    format_func=ui.SENIORITY_LABELS.__getitem__,
+    help=(
+        "The level the posting asks for, as the LLM read it. 'Not stated' is a "
+        "posting that does not say — or one not read yet."
+    ),
+)
+sort = f5.selectbox("Sort by", sort_options, index=sort_options.index("Last seen"))
 
 
 g1, g2, g3, g4 = st.columns(4, gap="medium")
@@ -119,9 +141,17 @@ if picked_markets:
     if len(non_null) != len(picked_codes):
         parts.append("country_code is null")
     clauses.append("(" + " or ".join(parts) + ")")
-if search:
-    clauses.append("(lower(title) like ? or lower(company_name) like ?)")
-    params += [f"%{search.lower()}%"] * 2
+if search.strip():
+    # The placeholder has always offered "dbt", and a technology is not in a
+    # title: so the term also matches a posting whose extracted stack names it.
+    clauses.append(
+        "(lower(title) like ? or lower(company_name) like ? "
+        "or lower(array_to_string(technologies, ' | ')) like ?)"
+    )
+    params += [f"%{search.strip().lower()}%"] * 3
+if picked_levels:
+    clauses.append(f"coalesce(seniority, 'unknown') in ({', '.join('?' for _ in picked_levels)})")
+    params += picked_levels
 for tech in picked_techs:
     clauses.append("list_contains(technologies, ?)")
     params.append(tech)
@@ -148,17 +178,51 @@ df = run_df(
         remote_policy, employment_type
     from marts.FT_JOB_POSTING
     {where}
-    order by {ORDERINGS[sort]}
-    limit 1000
+    order by {ORDERINGS.get(sort, ORDERINGS["Last seen"])}
+    limit {GRID_ROWS}
     """,
     tuple(params),
 )
-
-st.caption(
-    f"**{len(df):,}** matching "
-    + ("open roles" if active_only else "postings")
-    + " (showing up to 1,000)."
+# Counted, not inferred from the page of rows: with the limit at 1,000 and
+# 1,125 roles open, this line used to announce "1,000 matching open roles".
+total = int(
+    run_df(f"select count(*) as n from marts.FT_JOB_POSTING {where}", tuple(params)).iloc[0]["n"]
 )
+
+if cv_skills:
+    df["match"] = [match_share(techs_, cv_skills) for techs_ in df["technologies"]]
+    df["match"] = pd.to_numeric(df["match"], errors="coerce") * 100
+    if sort == MY_FIT:
+        df = df.sort_values("match", ascending=False, na_position="last", kind="stable")
+        df = df.reset_index(drop=True)
+
+noun = "open roles" if active_only else "postings"
+count_line = f"**{total:,}** matching {noun}"
+if total > len(df):
+    count_line += f", showing the first {len(df):,} — narrow the filters to see the rest"
+count_col, fit_col = st.columns([3, 2], vertical_alignment="center")
+count_col.caption(count_line + ".")
+with fit_col:
+    if cv_skills:
+        st.caption(
+            f"**My fit** scores each stack against the {len(cv_skills)} skills from your CV. "
+            "Blank = no stack to score."
+        )
+    else:
+        st.page_link(
+            "pages/6_CV_Match.py",
+            label="Add your CV to rank these by fit",
+            icon=":material/target:",
+        )
+
+if df.empty:
+    st.info(
+        "Nothing matches these filters. Loosen one — *Stack read only* and "
+        "*Written in English* are the two that cut the most.",
+        icon=":material/filter_alt_off:",
+    )
+    ui.page_footer()
+    st.stop()
 
 grid = ui.add_salary_eur(df)
 grid["market"] = grid["country_code"].map(ui.market_label)
@@ -171,6 +235,7 @@ view = grid[
         "title",
         "company_name",
         "market",
+        *(["match"] if cv_skills else []),
         "seniority",
         "technologies",
         "english_sufficient",
@@ -189,6 +254,13 @@ event = st.dataframe(
     selection_mode="single-row",
     height=420,
     column_config=ui.posting_columns(
+        match=ui.share_column(
+            "My fit",
+            help=(
+                "The technologies from your CV, out of the ones this posting names "
+                "plus one — the same score as My Fit. Blank = no stack to score."
+            ),
+        ),
         seniority=st.column_config.TextColumn("Seniority"),
         technologies=st.column_config.ListColumn(
             "Stack", help="Technologies the LLM found in the text. Empty = not read yet."
@@ -227,25 +299,28 @@ st.divider()
 
 head, links = st.columns([4, 1], gap="large")
 with head:
-    st.subheader(row["title"])
+    st.subheader(ui.md_text(row["title"]))
     location = _txt(row["location_raw"])
     st.markdown(
-        f"**{_txt(row['company_name']) or 'Unknown company'}** · "
-        f"{ui.market_label(row['country_code'])}" + (f" · {location}" if location else "")
+        f"**{ui.md_text(_txt(row['company_name']) or 'Unknown company')}** · "
+        f"{ui.market_label(row['country_code'])}"
+        + (f" · {ui.md_text(location)}" if location else "")
     )
     meta = [
         f"source: `{row['source']}`",
         f"first posted: {row['posted_at'].date()}" if pd.notna(row["posted_at"]) else None,
         f"last seen: {row['last_seen_at'].date()}" if pd.notna(row["last_seen_at"]) else None,
-        f"salary: {_txt(row['salary_raw'])}" if _txt(row["salary_raw"]) else None,
+        f"salary: {ui.md_text(_txt(row['salary_raw']))}" if _txt(row["salary_raw"]) else None,
         f"type: {_txt(row['employment_type'])}" if _txt(row["employment_type"]) else None,
         f"remote: {_txt(row['remote_policy'])}" if _txt(row["remote_policy"]) else None,
     ]
     st.caption(" · ".join(m for m in meta if m))
 with links:
-    st.link_button("Open posting ↗", row["source_url"], width="stretch")
-    apply_url = _txt(row["apply_url"])
-    if apply_url and apply_url != row["source_url"]:
+    source_url = ui.safe_url(row["source_url"])
+    if source_url:
+        st.link_button("Open posting ↗", source_url, width="stretch")
+    apply_url = ui.safe_url(row["apply_url"])
+    if apply_url and apply_url != source_url:
         st.link_button("Apply ↗", apply_url, width="stretch")
 
 # The card leads with fit, because that is what the app is for. Everything the
@@ -265,11 +340,13 @@ else:
         st.markdown("##### 🧰 The stack this role asks for")
         techs_list = _items(row["technologies"])
         if techs_list:
-            st.markdown(" ".join(f"`{t}`" for t in techs_list))
+            st.markdown(" ".join(f":gray-badge[{ui.md_text(t)}]" for t in techs_list))
         else:
             st.caption("The LLM read this posting but found no named technologies in it.")
         bits = [
-            f"**Role:** {_txt(row['normalized_role'])}" if _txt(row["normalized_role"]) else None,
+            f"**Role:** {ui.md_text(_txt(row['normalized_role']))}"
+            if _txt(row["normalized_role"])
+            else None,
             f"**Seniority:** {_txt(row['seniority'])}" if _txt(row["seniority"]) else None,
         ]
         if any(bits):
@@ -290,7 +367,7 @@ else:
             st.warning("**The local language is required** to do this job (not just a plus).")
         langs = _items(row["working_languages"])
         if langs:
-            st.markdown("Working languages: " + ", ".join(f"`{lang}`" for lang in langs))
+            st.markdown("Working languages: " + ", ".join(ui.md_text(lang) for lang in langs))
         if pd.notna(row["relocation_support"]) and row["relocation_support"]:
             st.markdown("📦 The posting mentions relocation support.")
         st.caption(
@@ -340,9 +417,9 @@ with st.expander("🛂 Visa sponsorship — only if you would need one"):
                     text=f"confidence {row['visa_confidence']:.0%}",
                 )
             if _txt(row["visa_reasoning"]):
-                st.markdown(f"**Why:** {_txt(row['visa_reasoning'])}")
+                st.markdown(f"**Why:** {ui.md_text(_txt(row['visa_reasoning']))}")
             if _txt(row["visa_evidence"]):
-                st.markdown(f"**Verbatim evidence:** “{_txt(row['visa_evidence'])}”")
+                st.markdown(f"**Verbatim evidence:** “{ui.md_text(_txt(row['visa_evidence']))}”")
 
 with st.expander("Full description (as scraped)"):
     # Descriptions live in staging, which the committed demo sample omits — the
